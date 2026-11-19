@@ -1,0 +1,507 @@
+// Adding or editing an app: its repository, then its deployments, each a
+// file from Releases or Actions and where it goes.
+import { Theme } from "theme.slint";
+import { BigButton, Toggle, Chip, SectionTitle, SettingRow, IconButton, TextField } from "widgets.slint";
+import { Icon, Icons, MoreIcons } from "icons.slint";
+import { Cand, EdDep } from "types.slint";
+import { AppIcon } from "applist.slint";
+import { ScrollView } from "std-widgets.slint";
+
+export global Editor {
+    in-out property <bool> shown;
+    // Editing an app already in the list (else adding one).
+    in property <bool> editing;
+    in-out property <string> repo;
+    in property <string> status;
+    in property <bool> status-error;
+    in property <bool> busy;
+    // The repository was found: the rest of the form shows.
+    in property <bool> fetched;
+    in-out property <string> name;
+    in property <image> icon;
+    in property <bool> has-icon;
+    in property <string> letter;
+
+    in property <[EdDep]> deps;
+    in property <int> selected;
+
+    // The selected deployment.
+    in-out property <int> channel; // 0 Releases, 1 Actions
+    in-out property <bool> prerelease;
+    in property <[string]> workflows;
+    in-out property <int> workflow: -1; // -1 any
+    in-out property <string> branch;
+    in property <string> default-branch;
+    in property <[Cand]> cands;
+    in property <int> cand: -1;
+    in property <string> offer-version;
+    in property <string> offer-note;
+    in property <bool> offer-loading;
+    in-out property <string> pattern;
+    in-out property <int> kind; // 0 AppImage, 1 Binary, 2 Plugin, 3 APK
+    in-out property <bool> desktop;
+    in-out property <string> install-name;
+    in-out property <bool> vst2;
+    in-out property <bool> vst3;
+    in-out property <bool> lv2;
+    in-out property <bool> clap;
+    // Choices made inside packages, as shown ("" none).
+    in property <string> inner;
+
+    callback fetch();
+    callback select-dep(int);
+    callback add-dep();
+    callback remove-dep(int);
+    // The channel, pre-release, workflow or branch changed: list its files.
+    callback load-offer();
+    callback pick-cand(int);
+    callback set-kind(int);
+    callback forget-inner();
+    callback choose-icon();
+    callback save();
+    callback cancel();
+}
+
+component Label inherits Text {
+    color: Theme.text-dim;
+    font-size: Theme.font-small;
+    font-weight: Theme.regular;
+    letter-spacing: 1px;
+}
+
+component CandRow inherits Rectangle {
+    in property <Cand> cand;
+    in property <bool> selected;
+    callback clicked;
+    height: 36px;
+    border-radius: 8px;
+    background: root.selected ? Theme.paint : touch.has-hover ? #ffffff10 : transparent;
+    HorizontalLayout {
+        padding-left: 10px;
+        padding-right: 10px;
+        spacing: 10px;
+        Text {
+            text: root.cand.name;
+            color: root.selected ? Theme.on-paint : root.cand.unlikely ? Theme.text-faint : Theme.text;
+            font-size: Theme.font-small + 1px;
+            font-weight: root.selected ? Theme.regular : Theme.light;
+            vertical-alignment: center;
+            horizontal-stretch: 1;
+            overflow: elide;
+        }
+        Text {
+            text: root.cand.kind;
+            color: root.selected ? Theme.on-paint : Theme.text-faint;
+            font-size: Theme.font-small;
+            vertical-alignment: center;
+            horizontal-stretch: 0;
+        }
+        Text {
+            text: root.cand.size;
+            color: root.selected ? Theme.on-paint : Theme.text-faint;
+            font-size: Theme.font-small;
+            vertical-alignment: center;
+            horizontal-alignment: right;
+            min-width: 70px;
+            horizontal-stretch: 0;
+        }
+    }
+    touch := TouchArea { clicked => { root.clicked(); } }
+}
+
+export component EditorDialog inherits Rectangle {
+    background: Theme.scrim;
+    init => { if !Editor.editing { repo-field.focus-input(); } }
+    // Clicks beside the dialog do nothing (it has unsaved changes).
+    TouchArea { }
+
+    property <length> w: min(980px, root.width - 40px);
+    property <length> h: min(760px, root.height - 40px);
+
+    Rectangle {
+        x: (root.width - root.w) / 2;
+        y: (root.height - root.h) / 2;
+        width: root.w;
+        height: root.h;
+        background: Theme.popup;
+        border-radius: Theme.radius + 4px;
+        border-width: 1px;
+        border-color: Theme.border-strong;
+        drop-shadow-blur: 30px;
+        drop-shadow-color: #000000c0;
+        TouchArea { }
+
+        VerticalLayout {
+            padding: 18px;
+            spacing: 12px;
+
+            // ------------------------------------------------- the app
+            HorizontalLayout {
+                spacing: 14px;
+                AppIcon {
+                    icon: Editor.icon;
+                    has-icon: Editor.has-icon;
+                    letter: Editor.letter;
+                    size: 56px;
+                    TouchArea {
+                        enabled: Editor.fetched;
+                        mouse-cursor: pointer;
+                        clicked => { Editor.choose-icon(); }
+                    }
+                }
+                VerticalLayout {
+                    spacing: 6px;
+                    horizontal-stretch: 1;
+                    alignment: center;
+                    Text {
+                        text: Editor.editing ? "Edit app" : "Add an app";
+                        font-size: Theme.font-large;
+                        color: Theme.text;
+                    }
+                    HorizontalLayout {
+                        spacing: 8px;
+                        repo-field := TextField {
+                            text <=> Editor.repo;
+                            placeholder: "GitHub repository: owner/name or its URL";
+                            icon: Icons.search-line;
+                            accepted => { Editor.fetch(); }
+                            escape => { Editor.cancel(); }
+                        }
+                        BigButton {
+                            text: Editor.busy ? "Looking…" : "Look up";
+                            enabled: !Editor.busy && Editor.repo != "";
+                            primary: !Editor.fetched;
+                            clicked => { Editor.fetch(); }
+                        }
+                    }
+                }
+                IconButton {
+                    icon: Icons.close;
+                    tip: "Close without saving";
+                    clicked => { Editor.cancel(); }
+                }
+            }
+            if Editor.status != "": Text {
+                text: Editor.status;
+                color: Editor.status-error ? Theme.danger.brighter(30%) : Theme.text-dim;
+                font-size: Theme.font-small;
+                wrap: word-wrap;
+            }
+
+            if Editor.fetched: HorizontalLayout {
+                vertical-stretch: 1;
+                spacing: 16px;
+
+                // ------------------------------------------ deployments
+                VerticalLayout {
+                    width: 250px;
+                    spacing: 8px;
+                    Label { text: "NAME"; }
+                    TextField {
+                        text <=> Editor.name;
+                        placeholder: "Name";
+                        clearable: false;
+                    }
+                    Rectangle { height: 4px; }
+                    Label { text: "DEPLOYMENTS"; }
+                    for d[i] in Editor.deps: Rectangle {
+                        height: 54px;
+                        border-radius: 10px;
+                        background: i == Editor.selected ? Theme.surface-2 : dep-touch.has-hover ? #ffffff0a : transparent;
+                        border-width: 1px;
+                        border-color: i == Editor.selected ? Theme.paint-b : Theme.border;
+                        dep-touch := TouchArea { clicked => { Editor.select-dep(i); } }
+                        HorizontalLayout {
+                            padding-left: 10px;
+                            padding-right: 4px;
+                            spacing: 4px;
+                            VerticalLayout {
+                                alignment: center;
+                                horizontal-stretch: 1;
+                                Text {
+                                    text: d.label;
+                                    color: Theme.text;
+                                    font-size: Theme.font-small + 1px;
+                                    overflow: elide;
+                                }
+                                Text {
+                                    text: d.detail;
+                                    color: Theme.text-faint;
+                                    font-size: Theme.font-small;
+                                    overflow: elide;
+                                }
+                            }
+                            if Editor.deps.length > 1: IconButton {
+                                y: (parent.height - self.height) / 2;
+                                size: 30px;
+                                icon-size: 15px;
+                                icon: Icons.trash-line;
+                                tip: "Remove this deployment (its files stay until you remove them)";
+                                clicked => { Editor.remove-dep(i); }
+                            }
+                        }
+                    }
+                    HorizontalLayout {
+                        alignment: start;
+                        BigButton {
+                            text: "Add a deployment";
+                            icon-line: MoreIcons.plus-line;
+                            tip: "Another file from the same repository: a plugin and a standalone build, an APK beside the desktop app…";
+                            clicked => { Editor.add-dep(); }
+                        }
+                    }
+                    Rectangle { vertical-stretch: 1; }
+                }
+
+                Rectangle { width: 1px; background: Theme.border; }
+
+                // ---------------------------------------- the deployment
+                ScrollView {
+                    horizontal-stretch: 1;
+                    viewport-height: form.preferred-height;
+                    viewport-width: self.visible-width;
+                    form := VerticalLayout {
+                        width: parent.visible-width;
+                        spacing: 10px;
+                        padding-right: 8px;
+                        padding-bottom: 12px;
+
+                        Label { text: "GET IT FROM"; }
+                        HorizontalLayout {
+                            spacing: 8px;
+                            alignment: start;
+                            Chip {
+                                text: "Releases";
+                                selected: Editor.channel == 0;
+                                tip: "The newest release on the Releases page";
+                                clicked => { Editor.channel = 0; Editor.load-offer(); }
+                            }
+                            Chip {
+                                text: "Actions (dev builds)";
+                                selected: Editor.channel == 1;
+                                tip: "The newest build from the Actions page (needs a token to download)";
+                                clicked => { Editor.channel = 1; Editor.load-offer(); }
+                            }
+                        }
+                        if Editor.channel == 0: SettingRow {
+                            label: "Include pre-releases";
+                            Toggle {
+                                checked: Editor.prerelease;
+                                toggled(v) => { Editor.prerelease = v; Editor.load-offer(); }
+                            }
+                        }
+                        if Editor.channel == 1: VerticalLayout {
+                            spacing: 8px;
+                            Text {
+                                text: "Workflow";
+                                color: Theme.text;
+                                font-size: Theme.font-small + 1px;
+                            }
+                            HorizontalLayout {
+                                spacing: 8px;
+                                alignment: start;
+                                Chip {
+                                    text: "Any";
+                                    selected: Editor.workflow < 0;
+                                    clicked => { Editor.workflow = -1; Editor.load-offer(); }
+                                }
+                                for w[i] in Editor.workflows: Chip {
+                                    text: w;
+                                    selected: Editor.workflow == i;
+                                    clicked => { Editor.workflow = i; Editor.load-offer(); }
+                                }
+                            }
+                            HorizontalLayout {
+                                spacing: 8px;
+                                Text {
+                                    text: "Branch";
+                                    color: Theme.text;
+                                    font-size: Theme.font-small + 1px;
+                                    vertical-alignment: center;
+                                    horizontal-stretch: 0;
+                                }
+                                TextField {
+                                    text <=> Editor.branch;
+                                    placeholder: "default (" + Editor.default-branch + ")";
+                                    accepted => { Editor.load-offer(); }
+                                    edited(t) => { if t == "" { Editor.load-offer(); } }
+                                }
+                            }
+                        }
+
+                        HorizontalLayout {
+                            spacing: 8px;
+                            Label {
+                                text: "FILE";
+                                vertical-alignment: center;
+                                horizontal-stretch: 0;
+                            }
+                            Text {
+                                text: Editor.offer-loading ? "loading…" : Editor.offer-version == "" ? "" : "offered by " + Editor.offer-version;
+                                color: Theme.text-faint;
+                                font-size: Theme.font-small;
+                                vertical-alignment: center;
+                                horizontal-stretch: 1;
+                                overflow: elide;
+                            }
+                        }
+                        Rectangle {
+                            border-radius: 10px;
+                            background: Theme.surface-2;
+                            border-width: 1px;
+                            border-color: Theme.border;
+                            height: min(6, max(1, Editor.cands.length)) * 36px + 12px;
+                            if Editor.cands.length == 0: Text {
+                                text: Editor.offer-loading ? "" : Editor.offer-note != "" ? Editor.offer-note : "No files offered.";
+                                color: Theme.text-faint;
+                                font-size: Theme.font-small;
+                                horizontal-alignment: center;
+                                vertical-alignment: center;
+                                wrap: word-wrap;
+                            }
+                            ScrollView {
+                                x: 6px;
+                                y: 6px;
+                                width: parent.width - 12px;
+                                height: parent.height - 12px;
+                                viewport-height: Editor.cands.length * 36px;
+                                viewport-width: self.visible-width;
+                                for c[i] in Editor.cands: CandRow {
+                                    x: 0;
+                                    y: i * 36px;
+                                    width: parent.visible-width;
+                                    cand: c;
+                                    selected: i == Editor.cand;
+                                    clicked => { Editor.pick-cand(i); }
+                                }
+                            }
+                        }
+                        if Editor.cands.length > 0 && Editor.offer-note != "": Text {
+                            text: Editor.offer-note;
+                            color: Theme.text-faint;
+                            font-size: Theme.font-small;
+                            wrap: word-wrap;
+                        }
+                        HorizontalLayout {
+                            spacing: 8px;
+                            Text {
+                                text: "Matches";
+                                color: Theme.text;
+                                font-size: Theme.font-small + 1px;
+                                vertical-alignment: center;
+                                horizontal-stretch: 0;
+                            }
+                            TextField {
+                                text <=> Editor.pattern;
+                                placeholder: "a file name pattern (* for any text)";
+                                clearable: false;
+                            }
+                        }
+                        Text {
+                            text: "Picking a file makes the pattern, with its version numbers as *, so later versions match it too.";
+                            color: Theme.text-faint;
+                            font-size: Theme.font-small;
+                            wrap: word-wrap;
+                        }
+
+                        Label { text: "WHAT IT IS"; }
+                        HorizontalLayout {
+                            spacing: 8px;
+                            alignment: start;
+                            Chip { text: "AppImage"; selected: Editor.kind == 0; clicked => { Editor.set-kind(0); } }
+                            Chip { text: "Binary"; selected: Editor.kind == 1; tip: "An executable (bare, or in an archive)"; clicked => { Editor.set-kind(1); } }
+                            Chip { text: "Plugin"; selected: Editor.kind == 2; tip: "VST2, VST3, LV2 and CLAP plugins"; clicked => { Editor.set-kind(2); } }
+                            Chip { text: "APK"; selected: Editor.kind == 3; tip: "An Android app, saved for your phone"; clicked => { Editor.set-kind(3); } }
+                        }
+                        Text {
+                            text: Editor.kind == 0 ? "Delivered to the AppImages folder; an AppImage inside a zip is unpacked and the zip discarded. The previous version's AppImage is deleted."
+                                : Editor.kind == 1 ? "The executable goes to the bin folder; a package laid out as bin/, lib/, share/ goes to those folders. The package is kept in the packages folder."
+                                : Editor.kind == 2 ? "Bundles go to the plugin folders, replacing older versions. The package is kept in the packages folder."
+                                : "Saved to the APK folder, replacing the previous APK. Installing it on the phone is up to you.";
+                            color: Theme.text-faint;
+                            font-size: Theme.font-small;
+                            wrap: word-wrap;
+                        }
+                        if Editor.kind == 0 || Editor.kind == 1: SettingRow {
+                            label: "Desktop entry";
+                            detail: "Write a .desktop file so it shows in your app menu";
+                            Toggle {
+                                checked: Editor.desktop;
+                                toggled(v) => { Editor.desktop = v; }
+                            }
+                        }
+                        if Editor.kind == 1: HorizontalLayout {
+                            spacing: 8px;
+                            Text {
+                                text: "Name in bin";
+                                color: Theme.text;
+                                font-size: Theme.font-small + 1px;
+                                vertical-alignment: center;
+                                horizontal-stretch: 0;
+                            }
+                            TextField {
+                                text <=> Editor.install-name;
+                                placeholder: "the executable's own name";
+                            }
+                        }
+                        if Editor.kind == 2: VerticalLayout {
+                            spacing: 8px;
+                            Text {
+                                text: "Formats to deliver";
+                                color: Theme.text;
+                                font-size: Theme.font-small + 1px;
+                            }
+                            HorizontalLayout {
+                                spacing: 8px;
+                                alignment: start;
+                                Chip { text: "VST3"; selected: Editor.vst3; clicked => { Editor.vst3 = !Editor.vst3; } }
+                                Chip { text: "LV2"; selected: Editor.lv2; clicked => { Editor.lv2 = !Editor.lv2; } }
+                                Chip { text: "CLAP"; selected: Editor.clap; clicked => { Editor.clap = !Editor.clap; } }
+                                Chip { text: "VST2"; selected: Editor.vst2; tip: "You pick the .so files once, at the first install"; clicked => { Editor.vst2 = !Editor.vst2; } }
+                            }
+                        }
+                        if Editor.inner != "": HorizontalLayout {
+                            spacing: 8px;
+                            Text {
+                                text: "Inside the package: " + Editor.inner;
+                                color: Theme.text-dim;
+                                font-size: Theme.font-small;
+                                vertical-alignment: center;
+                                horizontal-stretch: 1;
+                                wrap: word-wrap;
+                            }
+                            BigButton {
+                                text: "Ask again";
+                                tip: "Forget the files picked inside the package";
+                                clicked => { Editor.forget-inner(); }
+                            }
+                        }
+                    }
+                }
+            }
+            // A spacer before the lookup (not conditional: Slint's software
+            // renderer can trip over a conditional element going mid-frame).
+            Rectangle {
+                vertical-stretch: Editor.fetched ? 0 : 1;
+                max-height: Editor.fetched ? 0px : 100000px;
+            }
+
+            // ------------------------------------------------- buttons
+            HorizontalLayout {
+                spacing: 8px;
+                alignment: end;
+                BigButton {
+                    text: "Cancel";
+                    clicked => { Editor.cancel(); }
+                }
+                BigButton {
+                    text: Editor.editing ? "Save" : "Add";
+                    icon-line: Editor.editing ? Icons.check : MoreIcons.plus-line;
+                    primary: true;
+                    enabled: Editor.fetched && Editor.deps.length > 0 && !Editor.busy;
+                    clicked => { Editor.save(); }
+                }
+            }
+        }
+    }
+}

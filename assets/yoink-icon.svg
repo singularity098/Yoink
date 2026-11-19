@@ -1,0 +1,17 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="256" height="256" viewBox="0 0 256 256">
+  <defs>
+    <linearGradient id="paint" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0" stop-color="#7278fe"/>
+      <stop offset="0.55" stop-color="#c688d6"/>
+      <stop offset="1" stop-color="#a85eea"/>
+    </linearGradient>
+  </defs>
+  <rect x="8" y="8" width="240" height="240" rx="56" fill="#15151a"/>
+  <rect x="8.5" y="8.5" width="239" height="239" rx="55.5" fill="none" stroke="#ffffff29"/>
+  <g fill="none" stroke="url(#paint)" stroke-width="16" stroke-linecap="round" stroke-linejoin="round">
+    <!-- A hook pulling a package down into the tray. -->
+    <path d="M 128 40 L 128 92 A 22 22 0 1 1 106 114"/>
+    <path d="M 84 140 L 172 140 L 172 196 L 84 196 Z"/>
+    <path d="M 52 164 L 52 212 L 204 212 L 204 164"/>
+  </g>
+</svg>

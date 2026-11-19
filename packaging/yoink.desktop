@@ -1,0 +1,10 @@
+[Desktop Entry]
+Type=Application
+Name=Yoink
+GenericName=Package Manager
+Comment=Install and update apps, plugins and APKs from GitHub
+Exec=yoink
+Icon=yoink
+Terminal=false
+Categories=Utility;System;PackageManager;
+StartupWMClass=yoink

@@ -1,0 +1,350 @@
+// The options panel that slides out from the right: the folders things are
+// delivered to, the GitHub token, the look, and Yoink's own updates.
+// Changes apply at once and are saved.
+import { Theme } from "theme.slint";
+import { BigButton, Toggle, Chip, SectionTitle, SettingRow, IconButton, TextField } from "widgets.slint";
+import { Icon, Icons, MoreIcons } from "icons.slint";
+import { DirRow } from "types.slint";
+import { ScrollView } from "std-widgets.slint";
+
+export global Prefs {
+    in property <[DirRow]> dirs;
+    callback set-dir(string, string);
+    callback choose-dir(string);
+
+    in property <bool> has-token;
+    in property <string> token-status;
+    callback save-token(string);
+    callback clear-token();
+
+    in property <int> theme;
+    callback set-theme(int);
+
+    in property <bool> check-on-startup;
+    in property <bool> allow-failed;
+    in property <bool> hover-opens;
+    in property <bool> native-wayland;
+    // By id: check-on-startup, allow-failed, hover-opens, native-wayland.
+    callback set-flag(string, bool);
+
+    in property <string> version;
+    in property <string> self-status;
+    in property <bool> self-update-available;
+    // Run as an AppImage (only then can it replace itself).
+    in property <bool> self-can-update;
+    in property <int> self-channel;
+    in property <bool> self-checking;
+    // Replaced on disk: a restart runs the new version.
+    in property <bool> self-updated;
+    callback set-self-channel(int);
+    callback restart();
+    callback check-self();
+    callback update-self();
+    in property <string> config-path;
+}
+
+component Card inherits Rectangle {
+    border-radius: Theme.radius;
+    background: Theme.surface-2;
+    border-width: 1px;
+    border-color: Theme.border;
+    VerticalLayout {
+        padding: Theme.pad;
+        padding-top: 8px;
+        padding-bottom: 8px;
+        spacing: 4px;
+        @children
+    }
+}
+
+component DirLine inherits VerticalLayout {
+    in property <DirRow> entry;
+    callback interacted;
+    spacing: 4px;
+    padding-top: 4px;
+    padding-bottom: 4px;
+    property <string> shown: root.entry.path;
+    changed shown => { field.text = root.entry.path; }
+    HorizontalLayout {
+        spacing: 8px;
+        Text {
+            text: root.entry.label;
+            color: Theme.text;
+            vertical-alignment: center;
+            horizontal-stretch: 0;
+        }
+        Text {
+            text: root.entry.detail;
+            color: Theme.text-faint;
+            font-size: Theme.font-small;
+            vertical-alignment: center;
+            horizontal-stretch: 1;
+            overflow: elide;
+        }
+    }
+    HorizontalLayout {
+        spacing: 6px;
+        field := TextField {
+            text: root.entry.path;
+            placeholder: "Not set";
+            clearable: false;
+            accepted(t) => { root.interacted(); Prefs.set-dir(root.entry.id, t); }
+            // Saved when the field loses focus too.
+            changed has-focus => {
+                if !self.has-focus && self.text != root.entry.path {
+                    Prefs.set-dir(root.entry.id, self.text);
+                }
+            }
+        }
+        IconButton {
+            y: (parent.height - self.height) / 2;
+            icon: Icons.folder-line;
+            tip: "Pick the folder";
+            clicked => { root.interacted(); Prefs.choose-dir(root.entry.id); }
+        }
+    }
+}
+
+export component OptionsPanel inherits Rectangle {
+    in property <[string]> theme-names;
+    callback close;
+    callback interacted;
+    background: Theme.popup;
+    border-width: 1px;
+    border-color: Theme.border;
+
+    TouchArea {
+        pointer-event(e) => {
+            if e.kind == PointerEventKind.down { root.interacted(); }
+        }
+    }
+
+    VerticalLayout {
+        padding: 12px;
+        padding-top: 10px;
+        spacing: 8px;
+        HorizontalLayout {
+            spacing: 8px;
+            IconButton {
+                icon: Icons.chevron-right;
+                tip: "Close the options (Esc)";
+                clicked => { root.close(); }
+            }
+            Icon {
+                y: (parent.height - self.height) / 2;
+                width: 22px;
+                height: 22px;
+                line: Icons.gear-line;
+                weight: 1.5;
+                tint: Theme.paint;
+            }
+            Text {
+                text: "Options";
+                font-size: Theme.font-large;
+                color: Theme.text;
+                vertical-alignment: center;
+                horizontal-stretch: 1;
+            }
+        }
+        ScrollView {
+            vertical-stretch: 1;
+            viewport-height: col.preferred-height;
+            viewport-width: self.visible-width;
+            col := VerticalLayout {
+                width: parent.visible-width;
+                spacing: 10px;
+                padding-bottom: 20px;
+                padding-right: 6px;
+
+                SectionTitle { text: "GITHUB"; }
+                Card {
+                    Text {
+                        text: "A personal access token raises GitHub's limit of 60 requests an hour, gives access to private repositories, and is needed to download Actions builds. A fine-grained token with read access to Contents and Actions (or a classic one with no scopes, for public repositories) is enough.";
+                        color: Theme.text-dim;
+                        font-size: Theme.font-small;
+                        wrap: word-wrap;
+                    }
+                    HorizontalLayout {
+                        spacing: 8px;
+                        Icon {
+                            y: (parent.height - self.height) / 2;
+                            width: 18px;
+                            height: 18px;
+                            line: MoreIcons.key-line;
+                            weight: 1.6;
+                            tint: Prefs.has-token ? Theme.ok : Theme.text-faint;
+                        }
+                        Text {
+                            text: Prefs.token-status;
+                            color: Prefs.has-token ? Theme.text : Theme.text-faint;
+                            font-size: Theme.font-small + 1px;
+                            vertical-alignment: center;
+                            horizontal-stretch: 1;
+                            wrap: word-wrap;
+                        }
+                        if Prefs.has-token: BigButton {
+                            text: "Forget";
+                            tip: "Remove the token from the keyring";
+                            clicked => { root.interacted(); Prefs.clear-token(); }
+                        }
+                    }
+                    HorizontalLayout {
+                        spacing: 8px;
+                        token := TextField {
+                            placeholder: Prefs.has-token ? "Paste a new token to replace it" : "Paste a token (github_pat_… or ghp_…)";
+                            clearable: false;
+                            accepted(t) => { root.interacted(); Prefs.save-token(t); self.text = ""; }
+                        }
+                        BigButton {
+                            text: "Save";
+                            enabled: token.text != "";
+                            clicked => { root.interacted(); Prefs.save-token(token.text); token.text = ""; }
+                        }
+                    }
+                }
+
+                SectionTitle { text: "FOLDERS"; }
+                Card {
+                    Text {
+                        text: "Where each kind of package is delivered. Nothing here needs root.";
+                        color: Theme.text-dim;
+                        font-size: Theme.font-small;
+                        wrap: word-wrap;
+                    }
+                    for d in Prefs.dirs: DirLine {
+                        entry: d;
+                        interacted => { root.interacted(); }
+                    }
+                }
+
+                SectionTitle { text: "UPDATES"; }
+                Card {
+                    SettingRow {
+                        label: "Check when Yoink starts";
+                        Toggle {
+                            checked: Prefs.check-on-startup;
+                            toggled(v) => { root.interacted(); Prefs.set-flag("check-on-startup", v); }
+                        }
+                    }
+                    SettingRow {
+                        label: "Use builds from failed runs";
+                        detail: "An Actions run can fail in one job while the build you want is fine.";
+                        Toggle {
+                            checked: Prefs.allow-failed;
+                            toggled(v) => { root.interacted(); Prefs.set-flag("allow-failed", v); }
+                        }
+                    }
+                }
+
+                SectionTitle { text: "LOOK"; }
+                Card {
+                    // Theme chips, four to a line, all as wide.
+                    Rectangle {
+                        property <int> per-row: 4;
+                        property <length> gap: 8px;
+                        property <length> chip-w: (self.width - (self.per-row - 1) * self.gap) / self.per-row;
+                        height: ceil(root.theme-names.length / self.per-row) * (38px + self.gap);
+                        for name[i] in root.theme-names: Chip {
+                            x: mod(i, parent.per-row) * (parent.chip-w + parent.gap);
+                            y: floor(i / parent.per-row) * (38px + parent.gap) + 4px;
+                            width: parent.chip-w;
+                            text: name;
+                            selected: i == Prefs.theme;
+                            clicked => { root.interacted(); Prefs.set-theme(i); }
+                        }
+                    }
+                    SettingRow {
+                        label: "Open the options by resting the mouse on the edge";
+                        Toggle {
+                            checked: Prefs.hover-opens;
+                            toggled(v) => { root.interacted(); Prefs.set-flag("hover-opens", v); }
+                        }
+                    }
+                    SettingRow {
+                        label: "Native Wayland";
+                        detail: "Otherwise XWayland where available. Takes effect when Yoink restarts.";
+                        Toggle {
+                            checked: Prefs.native-wayland;
+                            toggled(v) => { root.interacted(); Prefs.set-flag("native-wayland", v); }
+                        }
+                    }
+                }
+
+                SectionTitle { text: "YOINK"; }
+                Card {
+                    HorizontalLayout {
+                        spacing: 10px;
+                        Icon {
+                            y: (parent.height - self.height) / 2;
+                            width: 28px;
+                            height: 28px;
+                            line: MoreIcons.logo-line;
+                            weight: 1.5;
+                            tint: Theme.paint;
+                        }
+                        VerticalLayout {
+                            alignment: center;
+                            horizontal-stretch: 1;
+                            Text {
+                                text: "Yoink " + Prefs.version;
+                                color: Theme.text;
+                            }
+                            Text {
+                                text: Prefs.self-status;
+                                color: Prefs.self-update-available ? Theme.paint-a : Theme.text-faint;
+                                font-size: Theme.font-small;
+                                wrap: word-wrap;
+                            }
+                        }
+                    }
+                    HorizontalLayout {
+                        spacing: 8px;
+                        alignment: start;
+                        Chip {
+                            text: "Releases";
+                            selected: Prefs.self-channel == 0;
+                            tip: "Update to new releases";
+                            clicked => { root.interacted(); Prefs.set-self-channel(0); }
+                        }
+                        Chip {
+                            text: "Dev builds";
+                            selected: Prefs.self-channel == 1;
+                            tip: "Update to the newest Actions build (needs a token)";
+                            clicked => { root.interacted(); Prefs.set-self-channel(1); }
+                        }
+                    }
+                    HorizontalLayout {
+                        spacing: 8px;
+                        alignment: start;
+                        BigButton {
+                            text: Prefs.self-checking ? "Checking…" : "Check";
+                            icon-line: Icons.refresh-line;
+                            enabled: !Prefs.self-checking;
+                            clicked => { root.interacted(); Prefs.check-self(); }
+                        }
+                        if Prefs.self-updated: BigButton {
+                            text: "Restart Yoink";
+                            icon-line: Icons.refresh-line;
+                            primary: true;
+                            clicked => { Prefs.restart(); }
+                        }
+                        if Prefs.self-update-available && !Prefs.self-updated: BigButton {
+                            text: "Update Yoink";
+                            icon-line: MoreIcons.download-line;
+                            primary: true;
+                            enabled: Prefs.self-can-update;
+                            tip: Prefs.self-can-update ? "Shows what will be replaced first" : "Only the AppImage can update itself";
+                            clicked => { root.interacted(); Prefs.update-self(); }
+                        }
+                    }
+                    Text {
+                        text: "Settings: " + Prefs.config-path;
+                        color: Theme.text-faint;
+                        font-size: Theme.font-small;
+                        wrap: word-wrap;
+                    }
+                }
+            }
+        }
+    }
+}

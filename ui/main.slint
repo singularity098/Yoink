@@ -1,0 +1,368 @@
+// Yoink's main window.
+//
+// A slim title bar on top, a toolbar (add, check, update all), the list of
+// apps; the options slide out from the right (the gear, or the right edge).
+// Adding or editing an app, the plan, the picker and the remove question
+// are dialogs over everything.
+import "../assets/fonts/Jost-Light.ttf";
+import "../assets/fonts/Jost-Regular.ttf";
+import { Theme, ThemeLook } from "theme.slint";
+import { BigButton, IconButton, Tips } from "widgets.slint";
+import { Icon, Icons, MoreIcons, IconArt } from "icons.slint";
+import { TooltipLayer } from "tooltip.slint";
+import { AppRow, DepRow, DirRow, PlanRow, Cand, EdDep, PickOpt } from "types.slint";
+import { Apps, AppList } from "applist.slint";
+import { Prefs, OptionsPanel } from "options.slint";
+import { Editor, EditorDialog } from "editor.slint";
+import { PlanView, Picker, Confirm, PlanDialog, PickerDialog, ConfirmDialog } from "dialogs.slint";
+
+export { Theme, IconArt, Apps, Prefs, Editor, PlanView, Picker, Confirm, AppRow, DepRow, DirRow, PlanRow, Cand, EdDep, PickOpt }
+
+// The right edge: brings the options in on a tap (or a rest, if asked).
+component EdgeStrip inherits Rectangle {
+    in property <string> icon;
+    in property <bool> hover-opens;
+    callback tap;
+    out property <bool> hovered: self.visible && (strip.has-hover || tab-touch.has-hover);
+    Timer {
+        interval: 350ms;
+        running: root.hover-opens && root.hovered;
+        triggered => { root.tap(); }
+    }
+    tab := Rectangle {
+        visible: strip.has-hover || tab-touch.has-hover;
+        width: 40px;
+        height: 110px;
+        x: root.width - self.width;
+        y: (root.height - self.height) / 2;
+        border-radius: 10px;
+        background: tab-touch.pressed ? Theme.paint : #00000080;
+        border-width: 1px;
+        border-color: tab-touch.pressed ? transparent : Theme.border-hover;
+        Icon {
+            x: (parent.width - self.width) / 2;
+            y: (parent.height - self.height) / 2;
+            line: root.icon;
+            weight: 1.8;
+            tint: tab-touch.pressed ? Theme.on-paint : Theme.text;
+        }
+        tab-touch := TouchArea { clicked => { root.tap(); } }
+    }
+    strip := TouchArea {
+        clicked => { root.tap(); }
+    }
+}
+
+component ResizeHandle inherits TouchArea {
+    in property <string> direction;
+    callback start(string);
+    mouse-cursor: root.direction == "n" || root.direction == "s" ? ns-resize
+        : root.direction == "e" || root.direction == "w" ? ew-resize
+        : root.direction == "nw" || root.direction == "se" ? nwse-resize
+        : nesw-resize;
+    pointer-event(e) => {
+        if e.kind == PointerEventKind.down && e.button == PointerEventButton.left {
+            root.start(root.direction);
+        }
+    }
+}
+
+component TopBar inherits Rectangle {
+    in property <bool> maximized;
+    in property <string> subtitle;
+    callback start-drag;
+    callback toggle-maximize;
+    callback minimize;
+    callback close-window;
+    callback open-options;
+    background: #00000066;
+    Rectangle { y: parent.height - 1px; height: 1px; background: Theme.border; }
+    TouchArea {
+        property <bool> armed;
+        pointer-event(e) => {
+            if e.button == PointerEventButton.left {
+                if e.kind == PointerEventKind.down { self.armed = true; }
+                if e.kind == PointerEventKind.up || e.kind == PointerEventKind.cancel { self.armed = false; }
+            }
+        }
+        moved => {
+            if self.armed && self.pressed && (abs(self.mouse-x - self.pressed-x) > 3px || abs(self.mouse-y - self.pressed-y) > 3px) {
+                self.armed = false;
+                root.start-drag();
+            }
+        }
+        double-clicked => { self.armed = false; root.toggle-maximize(); }
+    }
+    HorizontalLayout {
+        padding-left: 14px;
+        padding-right: 6px;
+        spacing: 6px;
+        Icon {
+            y: (parent.height - self.height) / 2;
+            width: 22px;
+            height: 22px;
+            line: MoreIcons.logo-line;
+            weight: 1.7;
+            tint: Theme.paint;
+        }
+        Text {
+            text: "Yoink";
+            font-size: Theme.font + 1px;
+            font-weight: Theme.regular;
+            letter-spacing: 1px;
+            color: Theme.text;
+            vertical-alignment: center;
+        }
+        Text {
+            text: root.subtitle;
+            font-size: Theme.font-small;
+            color: Theme.text-faint;
+            vertical-alignment: center;
+            horizontal-alignment: center;
+            horizontal-stretch: 1;
+            overflow: elide;
+        }
+        IconButton { y: (parent.height - self.height) / 2; size: 34px; icon-size: 18px; icon: Icons.gear-line; weight: 1.6; tip: "Options (,)"; clicked => { root.open-options(); } }
+        IconButton { y: (parent.height - self.height) / 2; size: 34px; icon-size: 18px; icon: Icons.minimize-line; tip: "Minimise"; clicked => { root.minimize(); } }
+        IconButton { y: (parent.height - self.height) / 2; size: 34px; icon-size: 18px; icon: root.maximized ? Icons.restore-line : Icons.maximize-line; weight: 1.6; tip: root.maximized ? "Restore" : "Maximise"; clicked => { root.toggle-maximize(); } }
+        IconButton { y: (parent.height - self.height) / 2; size: 34px; icon-size: 18px; icon: Icons.close; tip: "Quit"; clicked => { root.close-window(); } }
+    }
+}
+
+component Toolbar inherits HorizontalLayout {
+    spacing: 8px;
+    BigButton {
+        text: "Add";
+        icon-line: MoreIcons.plus-line;
+        tip: "Add an app by its GitHub repository (Ctrl+N)";
+        clicked => { Apps.add(); }
+    }
+    BigButton {
+        text: Apps.checking ? "Checking…" : "Check for updates";
+        icon-line: Icons.refresh-line;
+        enabled: !Apps.checking && Apps.rows.length > 0;
+        tip: "Ask GitHub for the newest builds (F5)";
+        clicked => { Apps.check-all(); }
+    }
+    BigButton {
+        text: Apps.updates > 0 ? "Update all (" + Apps.updates + ")" : "Update all";
+        icon-line: MoreIcons.download-line;
+        primary: Apps.updates > 0;
+        enabled: Apps.updates > 0 && !Apps.busy;
+        tip: "Download everything new; you see the full list before anything is installed";
+        clicked => { Apps.update-all(); }
+    }
+    Rectangle { horizontal-stretch: 1; }
+    if Apps.busy: HorizontalLayout {
+        spacing: 8px;
+        Text {
+            text: Apps.busy-text;
+            color: Theme.text-dim;
+            font-size: Theme.font-small;
+            vertical-alignment: center;
+            overflow: elide;
+        }
+        IconButton {
+            y: (parent.height - self.height) / 2;
+            icon: Icons.close;
+            tip: "Stop";
+            clicked => { Apps.cancel-busy(); }
+        }
+    }
+}
+
+export component MainWindow inherits Window {
+    title: "Yoink";
+    no-frame: true;
+    icon: @image-url("../assets/yoink-icon.svg");
+    background: Theme.bg;
+    min-width: 720px;
+    min-height: 480px;
+    preferred-width: 1100px;
+    preferred-height: 760px;
+    default-font-size: Theme.font;
+    default-font-family: "Jost";
+    default-font-weight: Theme.light;
+
+    in property <bool> window-maximized;
+    in property <bool> hover-opens;
+    in property <[string]> theme-names: Theme.names;
+    in-out property <string> toast;
+    in property <bool> toast-error;
+    in property <string> subtitle;
+
+    callback start-drag;
+    callback start-resize(string);
+    callback minimize-window;
+    callback toggle-maximize;
+    callback close-window;
+
+    property <length> top-inset: 44px;
+    property <bool> framed: !root.window-maximized;
+    property <length> edge-inset: root.framed ? 5px : 0;
+    property <length> strip-width: 18px;
+
+    in-out property <float> right-pos: 0;
+    property <length> right-width: min(600px, root.width * 0.92);
+
+    public function open-options() { root.right-pos = 1; }
+    public function close-options() { root.right-pos = 0; keys.focus(); }
+    public function focus-main() { keys.focus(); }
+
+    changed right-pos => { Tips.hide(); }
+
+    forward-focus: keys;
+    keys := FocusScope {
+        key-pressed(e) => {
+            if e.text == Key.Escape {
+                if Picker.shown { Picker.cancel(); return accept; }
+                if Confirm.shown { Confirm.cancel(); return accept; }
+                if PlanView.shown && !PlanView.applying { PlanView.cancel(); return accept; }
+                if Editor.shown { Editor.cancel(); return accept; }
+                if root.right-pos > 0 { root.close-options(); return accept; }
+                return accept;
+            }
+            if e.text == Key.F5 { Apps.check-all(); return accept; }
+            if e.text == "," { root.open-options(); return accept; }
+            if e.modifiers.control && (e.text == "n" || e.text == "N") { Apps.add(); return accept; }
+            reject
+        }
+    }
+
+    // ---------------------------------------------------------- main area
+    Rectangle {
+        y: root.top-inset;
+        height: root.height - root.top-inset;
+        VerticalLayout {
+            padding: 18px;
+            padding-left: 22px;
+            padding-right: 22px;
+            spacing: 14px;
+            Toolbar { }
+            AppList { vertical-stretch: 1; }
+        }
+    }
+
+    TopBar {
+        y: 0;
+        height: root.top-inset;
+        maximized: root.window-maximized;
+        subtitle: root.subtitle;
+        start-drag => { root.start-drag(); }
+        toggle-maximize => { root.toggle-maximize(); }
+        minimize => { root.minimize-window(); }
+        close-window => { root.close-window(); }
+        open-options => { root.open-options(); }
+    }
+
+    // ----------------------------------------------------------- options
+    if root.right-pos > 0: Rectangle {
+        y: root.top-inset;
+        height: root.height - root.top-inset;
+        background: Colors.rgba(0, 0, 0, 0.55 * root.right-pos);
+        TouchArea { clicked => { root.close-options(); } }
+    }
+    OptionsPanel {
+        y: root.top-inset;
+        width: root.right-width;
+        height: root.height - root.top-inset;
+        x: root.width - root.right-pos * root.right-width;
+        visible: root.right-pos > 0;
+        animate x { duration: Theme.slide; easing: ease-out; }
+        theme-names: root.theme-names;
+        close => { root.close-options(); }
+    }
+    EdgeStrip {
+        visible: root.right-pos == 0;
+        x: root.width - root.strip-width;
+        y: root.top-inset;
+        width: root.strip-width - root.edge-inset;
+        height: root.height - root.top-inset;
+        icon: Icons.gear-line;
+        hover-opens: root.hover-opens;
+        tap => { root.open-options(); }
+    }
+
+    // ----------------------------------------------------------- dialogs
+    if Editor.shown: EditorDialog {
+        x: 0;
+        y: 0;
+        width: root.width;
+        height: root.height;
+    }
+    if PlanView.shown: PlanDialog {
+        x: 0;
+        y: 0;
+        width: root.width;
+        height: root.height;
+    }
+    if Picker.shown: PickerDialog {
+        x: 0;
+        y: 0;
+        width: root.width;
+        height: root.height;
+    }
+    if Confirm.shown: ConfirmDialog {
+        x: 0;
+        y: 0;
+        width: root.width;
+        height: root.height;
+    }
+
+    // ---------------------------------------------------------- the toast
+    if root.toast != "": Rectangle {
+        x: (root.width - self.width) / 2;
+        y: root.height - self.height - 22px;
+        width: min(root.width - 40px, toast-text.preferred-width + 40px);
+        height: max(44px, toast-text.preferred-height + 20px);
+        border-radius: 22px;
+        background: Theme.popup;
+        border-width: 1px;
+        border-color: root.toast-error ? Theme.danger : Theme.border-strong;
+        drop-shadow-blur: 16px;
+        drop-shadow-color: #000000a0;
+        toast-text := Text {
+            x: 20px;
+            width: parent.width - 40px;
+            text: root.toast;
+            color: root.toast-error ? Theme.danger.brighter(40%) : Theme.text;
+            font-size: Theme.font-small + 1px;
+            horizontal-alignment: center;
+            vertical-alignment: center;
+            wrap: word-wrap;
+        }
+        TouchArea { clicked => { root.toast = ""; } }
+    }
+
+    // ------------------------------------------------- window border handles
+    if root.framed: Rectangle {
+        property <length> b: root.edge-inset;
+        property <length> c: 14px;
+        ResizeHandle { direction: "n"; x: parent.c; y: 0; width: root.width - 2 * parent.c; height: parent.b; start(d) => { root.start-resize(d); } }
+        ResizeHandle { direction: "s"; x: parent.c; y: root.height - parent.b; width: root.width - 2 * parent.c; height: parent.b; start(d) => { root.start-resize(d); } }
+        ResizeHandle { direction: "w"; x: 0; y: parent.c; width: parent.b; height: root.height - 2 * parent.c; start(d) => { root.start-resize(d); } }
+        ResizeHandle { direction: "e"; x: root.width - parent.b; y: parent.c; width: parent.b; height: root.height - 2 * parent.c; start(d) => { root.start-resize(d); } }
+        ResizeHandle { direction: "nw"; x: 0; y: 0; width: parent.c; height: parent.c; start(d) => { root.start-resize(d); } }
+        ResizeHandle { direction: "ne"; x: root.width - parent.c; y: 0; width: parent.c; height: parent.c; start(d) => { root.start-resize(d); } }
+        ResizeHandle { direction: "sw"; x: 0; y: root.height - parent.c; width: parent.c; height: parent.c; start(d) => { root.start-resize(d); } }
+        ResizeHandle { direction: "se"; x: root.width - parent.c; y: root.height - parent.c; width: parent.c; height: parent.c; start(d) => { root.start-resize(d); } }
+    }
+
+    TooltipLayer {
+        x: 0;
+        y: 0;
+        width: root.width;
+        height: root.height;
+    }
+
+    if Theme.scanlines: Image {
+        x: 0;
+        y: 0;
+        width: root.width;
+        height: root.height;
+        source: @image-url("../assets/scanlines.png");
+        horizontal-tiling: repeat;
+        vertical-tiling: repeat;
+        accessible-role: none;
+    }
+}

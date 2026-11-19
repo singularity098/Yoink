@@ -1,0 +1,325 @@
+// The itemised plan shown before anything is installed or removed, the
+// picker for files only you can choose, and the remove question.
+import { Theme } from "theme.slint";
+import { BigButton, IconButton } from "widgets.slint";
+import { Icon, Icons, MoreIcons } from "icons.slint";
+import { PlanRow, PickOpt } from "types.slint";
+import { ScrollView } from "std-widgets.slint";
+
+export global PlanView {
+    in-out property <bool> shown;
+    in property <string> title;
+    in property <string> summary;
+    in property <[PlanRow]> rows;
+    in property <bool> applying;
+    in property <string> apply-text: "Apply";
+    in property <bool> can-apply: true;
+    // Destructive (removing): the button is red.
+    in property <bool> danger;
+    callback apply();
+    callback cancel();
+}
+
+export global Picker {
+    in-out property <bool> shown;
+    in property <string> title;
+    in property <string> detail;
+    in property <[PickOpt]> options;
+    in property <bool> multi;
+    callback toggle(int);
+    callback confirm();
+    callback cancel();
+}
+
+export global Confirm {
+    in-out property <bool> shown;
+    in property <string> title;
+    in property <string> text;
+    in property <bool> has-files;
+    callback remove-files();
+    callback forget();
+    callback cancel();
+}
+
+component Frame inherits Rectangle {
+    in property <length> w;
+    in property <length> h;
+    background: Theme.scrim;
+    TouchArea { }
+    Rectangle {
+        x: (root.width - root.w) / 2;
+        y: (root.height - root.h) / 2;
+        width: root.w;
+        height: root.h;
+        background: Theme.popup;
+        border-radius: Theme.radius + 4px;
+        border-width: 1px;
+        border-color: Theme.border-strong;
+        drop-shadow-blur: 30px;
+        drop-shadow-color: #000000c0;
+        TouchArea { }
+        @children
+    }
+}
+
+component Verb inherits Rectangle {
+    in property <int> tone;
+    in property <string> text;
+    property <color> c: root.tone == 1 ? Theme.paint-a
+        : root.tone == 2 ? Theme.ok
+        : root.tone == 3 ? Theme.paint-b
+        : root.tone == 4 ? Theme.danger
+        : root.tone == 5 ? Theme.paint-c
+        : root.tone == 6 ? Theme.ok
+        : root.tone == 8 ? Theme.warn
+        : Theme.text-faint;
+    width: 76px;
+    height: 22px;
+    border-radius: 6px;
+    background: root.c.transparentize(82%);
+    border-width: 1px;
+    border-color: root.c.transparentize(50%);
+    Text {
+        text: root.text;
+        color: root.c.brighter(20%);
+        font-size: Theme.font-small - 1px;
+        font-weight: Theme.regular;
+        horizontal-alignment: center;
+        vertical-alignment: center;
+    }
+}
+
+export component PlanDialog inherits Frame {
+    w: min(980px, root.width - 40px);
+    h: min(780px, root.height - 40px);
+    VerticalLayout {
+        padding: 18px;
+        spacing: 12px;
+        HorizontalLayout {
+            spacing: 12px;
+            Icon {
+                y: (parent.height - self.height) / 2;
+                width: 26px;
+                height: 26px;
+                line: PlanView.danger ? Icons.trash-line : MoreIcons.box-line;
+                weight: 1.5;
+                tint: PlanView.danger ? Theme.danger : Theme.paint;
+            }
+            VerticalLayout {
+                horizontal-stretch: 1;
+                Text {
+                    text: PlanView.title;
+                    font-size: Theme.font-large;
+                    color: Theme.text;
+                }
+                Text {
+                    text: PlanView.summary;
+                    font-size: Theme.font-small;
+                    color: Theme.text-dim;
+                    wrap: word-wrap;
+                }
+            }
+        }
+        Rectangle {
+            vertical-stretch: 1;
+            border-radius: 10px;
+            background: Theme.surface-2;
+            border-width: 1px;
+            border-color: Theme.border;
+            ScrollView {
+                x: 8px;
+                y: 8px;
+                width: parent.width - 16px;
+                height: parent.height - 16px;
+                viewport-height: rows.preferred-height;
+                viewport-width: self.visible-width;
+                rows := VerticalLayout {
+                    width: parent.visible-width;
+                    spacing: 3px;
+                    padding-right: 6px;
+                    for r in PlanView.rows: HorizontalLayout {
+                        spacing: 10px;
+                        padding-top: r.tone == 0 ? 10px : 0;
+                        min-height: r.tone == 0 ? 38px : 26px;
+                        if r.tone == 0: Text {
+                            text: r.text;
+                            color: Theme.text;
+                            font-size: Theme.font;
+                            font-weight: Theme.regular;
+                            vertical-alignment: center;
+                            horizontal-stretch: 1;
+                            overflow: elide;
+                        }
+                        if r.tone == 0: Text {
+                            text: r.detail;
+                            color: Theme.accent;
+                            font-size: Theme.font-small;
+                            vertical-alignment: center;
+                            horizontal-stretch: 0;
+                        }
+                        if r.tone != 0: Verb {
+                            y: (parent.height - self.height) / 2;
+                            tone: r.tone;
+                            text: r.verb;
+                        }
+                        if r.tone != 0: Text {
+                            text: r.text;
+                            color: r.tone == 7 ? Theme.text-dim : r.tone == 8 ? Theme.warn.brighter(20%) : Theme.text;
+                            font-size: Theme.font-small + 1px;
+                            vertical-alignment: center;
+                            horizontal-stretch: 1;
+                            wrap: word-wrap;
+                        }
+                        if r.tone != 0 && r.detail != "": Text {
+                            text: r.detail;
+                            color: r.tone == 8 ? Theme.warn : Theme.text-faint;
+                            font-size: Theme.font-small;
+                            vertical-alignment: center;
+                            horizontal-alignment: right;
+                            horizontal-stretch: 0;
+                            max-width: 300px;
+                            wrap: word-wrap;
+                        }
+                    }
+                }
+            }
+        }
+        HorizontalLayout {
+            spacing: 8px;
+            alignment: end;
+            BigButton {
+                text: "Cancel";
+                enabled: !PlanView.applying;
+                tip: "Nothing changes; the downloads are discarded";
+                clicked => { PlanView.cancel(); }
+            }
+            BigButton {
+                text: PlanView.applying ? "Working…" : PlanView.apply-text;
+                icon-line: PlanView.danger ? Icons.trash-line : Icons.check;
+                primary: !PlanView.danger;
+                danger: PlanView.danger;
+                enabled: PlanView.can-apply && !PlanView.applying;
+                clicked => { PlanView.apply(); }
+            }
+        }
+    }
+}
+
+export component PickerDialog inherits Frame {
+    w: min(720px, root.width - 40px);
+    h: min(600px, root.height - 40px);
+    VerticalLayout {
+        padding: 18px;
+        spacing: 12px;
+        Text {
+            text: Picker.title;
+            font-size: Theme.font-large;
+            color: Theme.text;
+            wrap: word-wrap;
+        }
+        Text {
+            text: Picker.detail;
+            font-size: Theme.font-small;
+            color: Theme.text-dim;
+            wrap: word-wrap;
+        }
+        Rectangle {
+            vertical-stretch: 1;
+            border-radius: 10px;
+            background: Theme.surface-2;
+            border-width: 1px;
+            border-color: Theme.border;
+            ScrollView {
+                x: 6px;
+                y: 6px;
+                width: parent.width - 12px;
+                height: parent.height - 12px;
+                viewport-height: Picker.options.length * 40px;
+                viewport-width: self.visible-width;
+                for o[i] in Picker.options: Rectangle {
+                    x: 0;
+                    y: i * 40px;
+                    width: parent.visible-width;
+                    height: 38px;
+                    border-radius: 8px;
+                    background: o.checked ? Theme.paint : t.has-hover ? #ffffff10 : transparent;
+                    t := TouchArea { clicked => { Picker.toggle(i); } }
+                    HorizontalLayout {
+                        padding-left: 10px;
+                        spacing: 10px;
+                        Icon {
+                            y: (parent.height - self.height) / 2;
+                            width: 18px;
+                            height: 18px;
+                            line: o.checked ? Icons.check : "";
+                            weight: 2.2;
+                            tint: Theme.on-paint;
+                        }
+                        Text {
+                            text: o.text;
+                            color: o.checked ? Theme.on-paint : Theme.text;
+                            font-size: Theme.font-small + 1px;
+                            vertical-alignment: center;
+                            overflow: elide;
+                        }
+                    }
+                }
+            }
+        }
+        HorizontalLayout {
+            spacing: 8px;
+            alignment: end;
+            BigButton {
+                text: "Cancel";
+                clicked => { Picker.cancel(); }
+            }
+            BigButton {
+                text: Picker.multi ? "Use these" : "Use this";
+                primary: true;
+                clicked => { Picker.confirm(); }
+            }
+        }
+    }
+}
+
+export component ConfirmDialog inherits Frame {
+    w: min(560px, root.width - 40px);
+    h: 260px;
+    VerticalLayout {
+        padding: 20px;
+        spacing: 14px;
+        Text {
+            text: Confirm.title;
+            font-size: Theme.font-large;
+            color: Theme.text;
+            wrap: word-wrap;
+        }
+        Text {
+            text: Confirm.text;
+            font-size: Theme.font-small + 1px;
+            color: Theme.text-dim;
+            wrap: word-wrap;
+            vertical-stretch: 1;
+        }
+        HorizontalLayout {
+            spacing: 8px;
+            alignment: end;
+            BigButton {
+                text: "Cancel";
+                clicked => { Confirm.cancel(); }
+            }
+            BigButton {
+                text: "Stop managing";
+                tip: "Remove it from Yoink and leave its files where they are";
+                clicked => { Confirm.forget(); }
+            }
+            if Confirm.has-files: BigButton {
+                text: "Delete its files…";
+                icon-line: Icons.trash-line;
+                primary: true;
+                tip: "Shows every file that would be deleted first";
+                clicked => { Confirm.remove-files(); }
+            }
+        }
+    }
+}

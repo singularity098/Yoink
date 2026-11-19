@@ -1,0 +1,289 @@
+// The list of managed apps: each a card with its icon, its deployments
+// (installed and newest version, status) and its buttons.
+import { Theme } from "theme.slint";
+import { BigButton, IconButton, MenuItem, Tip } from "widgets.slint";
+import { Icon, Icons, MoreIcons } from "icons.slint";
+import { AppRow, DepRow } from "types.slint";
+import { ScrollView } from "std-widgets.slint";
+
+export global Apps {
+    in property <[AppRow]> rows;
+    in property <bool> checking;
+    // Deployments with an update (or not installed yet).
+    in property <int> updates;
+    // Preparing or applying a plan.
+    in property <bool> busy;
+    in property <string> busy-text;
+    callback add();
+    callback check-all();
+    callback update-all();
+    callback update(int);
+    callback force(int);
+    callback check(int);
+    callback edit(int);
+    callback remove(int);
+    callback open-page(int);
+    callback cancel-busy();
+}
+
+// The app's icon, or its first letter on the theme's paint.
+export component AppIcon inherits Rectangle {
+    in property <image> icon;
+    in property <bool> has-icon;
+    in property <string> letter;
+    in property <length> size: 52px;
+    width: root.size;
+    height: root.size;
+    border-radius: root.size * 0.24;
+    background: root.has-icon ? #ffffff0a : Theme.paint;
+    clip: true;
+    if root.has-icon: Image {
+        x: root.size * 0.08;
+        y: root.size * 0.08;
+        width: root.size * 0.84;
+        height: root.size * 0.84;
+        source: root.icon;
+        image-fit: contain;
+    }
+    if !root.has-icon: Text {
+        text: root.letter;
+        color: Theme.on-paint;
+        font-size: root.size * 0.46;
+        font-weight: Theme.regular;
+        horizontal-alignment: center;
+        vertical-alignment: center;
+    }
+}
+
+component StatusDot inherits Rectangle {
+    in property <int> tone;
+    width: 8px;
+    height: 8px;
+    border-radius: 4px;
+    background: root.tone == 1 ? Theme.ok
+        : root.tone == 2 ? Theme.paint-a
+        : root.tone == 3 ? Theme.paint-b
+        : root.tone == 4 ? Theme.danger
+        : root.tone == 5 ? Theme.warn
+        : Theme.text-faint;
+}
+
+component DepLine inherits Rectangle {
+    in property <DepRow> dep;
+    min-height: 26px;
+    VerticalLayout {
+        spacing: 2px;
+        HorizontalLayout {
+            spacing: 10px;
+            StatusDot {
+                y: (parent.height - self.height) / 2;
+                tone: root.dep.tone;
+            }
+            Text {
+                text: root.dep.label;
+                color: Theme.text-dim;
+                font-size: Theme.font-small;
+                font-weight: Theme.regular;
+                vertical-alignment: center;
+                min-width: 120px;
+                horizontal-stretch: 0;
+                overflow: elide;
+            }
+            Text {
+                text: root.dep.installed == "" ? "not installed" : root.dep.installed;
+                color: root.dep.installed == "" ? Theme.text-faint : Theme.text;
+                font-size: Theme.font-small;
+                vertical-alignment: center;
+                horizontal-stretch: 0;
+                overflow: elide;
+            }
+            if root.dep.latest != "" && root.dep.latest != root.dep.installed: Text {
+                text: "→ " + root.dep.latest;
+                color: Theme.accent;
+                font-size: Theme.font-small;
+                font-weight: Theme.regular;
+                vertical-alignment: center;
+                horizontal-stretch: 0;
+                overflow: elide;
+            }
+            Text {
+                text: root.dep.status;
+                color: root.dep.tone == 4 ? Theme.danger.brighter(30%) : root.dep.tone == 2 ? Theme.paint-a : Theme.text-faint;
+                font-size: Theme.font-small;
+                vertical-alignment: center;
+                horizontal-alignment: right;
+                horizontal-stretch: 1;
+                overflow: elide;
+            }
+        }
+        if root.dep.progress >= 0: Rectangle {
+            height: 4px;
+            border-radius: 2px;
+            background: Theme.track;
+            Rectangle {
+                x: 0;
+                width: parent.width * max(0, min(1, root.dep.progress));
+                border-radius: 2px;
+                background: Theme.paint;
+            }
+        }
+        if root.dep.note != "": Text {
+            text: root.dep.note;
+            color: Theme.text-faint;
+            font-size: Theme.font-small - 1px;
+            font-weight: Theme.regular;
+            wrap: word-wrap;
+        }
+    }
+    Tip { text: root.dep.status; hover: hover.has-hover; pressed: false; }
+    hover := TouchArea { enabled: root.dep.tone == 4; }
+}
+
+component AppCard inherits Rectangle {
+    in property <AppRow> app;
+    in property <int> index;
+    border-radius: Theme.radius;
+    background: Theme.surface;
+    border-width: 1px;
+    border-color: hover.has-hover ? Theme.border-strong : Theme.border;
+
+    hover := TouchArea {
+        double-clicked => { Apps.edit(root.index); }
+    }
+
+    HorizontalLayout {
+        padding: Theme.pad;
+        spacing: Theme.pad;
+        AppIcon {
+            y: Theme.pad;
+            icon: root.app.icon;
+            has-icon: root.app.has-icon;
+            letter: root.app.letter;
+        }
+        VerticalLayout {
+            horizontal-stretch: 1;
+            spacing: 4px;
+            HorizontalLayout {
+                spacing: 10px;
+                Text {
+                    text: root.app.name;
+                    font-size: Theme.font-large;
+                    color: Theme.text;
+                    vertical-alignment: center;
+                    horizontal-stretch: 0;
+                    overflow: elide;
+                }
+                Text {
+                    text: root.app.repo;
+                    font-size: Theme.font-small;
+                    color: Theme.text-faint;
+                    vertical-alignment: center;
+                    horizontal-stretch: 1;
+                    overflow: elide;
+                }
+            }
+            for d in root.app.deps: DepLine { dep: d; }
+            if root.app.deps.length == 0: Text {
+                text: "No deployments: edit the app to add one.";
+                color: Theme.text-faint;
+                font-size: Theme.font-small;
+            }
+        }
+        VerticalLayout {
+            alignment: start;
+            spacing: 6px;
+            horizontal-stretch: 0;
+            HorizontalLayout {
+                spacing: 6px;
+                BigButton {
+                    text: "Update";
+                    icon-line: MoreIcons.download-line;
+                    primary: root.app.updatable;
+                    enabled: root.app.updatable && !root.app.busy && !Apps.busy;
+                    tip: "Download and install what is new (you see the full list first)";
+                    clicked => { Apps.update(root.index); }
+                }
+                IconButton {
+                    y: (parent.height - self.height) / 2;
+                    icon: "";
+                    icon-solid: Icons.more-solid;
+                    tip: "More";
+                    clicked => { menu.show(); }
+                }
+            }
+        }
+    }
+
+    menu := PopupWindow {
+        x: root.width - 240px - Theme.pad;
+        y: Theme.pad + 48px;
+        width: 240px;
+        Rectangle {
+            background: Theme.popup;
+            border-radius: 10px;
+            border-width: 1px;
+            border-color: Theme.border-strong;
+            drop-shadow-blur: 16px;
+            drop-shadow-color: #000000a0;
+            VerticalLayout {
+                padding: 6px;
+                MenuItem { text: "Check for updates"; clicked => { Apps.check(root.index); } }
+                MenuItem { text: "Force update (reinstall)"; clicked => { Apps.force(root.index); } }
+                MenuItem { text: "Edit…"; clicked => { Apps.edit(root.index); } }
+                MenuItem { text: "Open the repository page"; clicked => { Apps.open-page(root.index); } }
+                Rectangle { height: 1px; background: Theme.border; }
+                MenuItem { text: "Remove…"; clicked => { Apps.remove(root.index); } }
+            }
+        }
+    }
+}
+
+export component AppList inherits Rectangle {
+    if Apps.rows.length == 0: VerticalLayout {
+        alignment: center;
+        spacing: 14px;
+        Icon {
+            x: (parent.width - self.width) / 2;
+            width: 72px;
+            height: 72px;
+            line: MoreIcons.logo-line;
+            weight: 1.2;
+            tint: Theme.paint;
+        }
+        Text {
+            text: "Nothing yoinked yet";
+            font-size: Theme.font-title;
+            color: Theme.text;
+            horizontal-alignment: center;
+        }
+        Text {
+            text: "Add an app by its GitHub repository: AppImages, binaries,\nplugins and APKs, from Releases or from Actions builds.";
+            font-size: Theme.font;
+            color: Theme.text-dim;
+            horizontal-alignment: center;
+        }
+        HorizontalLayout {
+            alignment: center;
+            BigButton {
+                text: "Add an app";
+                icon-line: MoreIcons.plus-line;
+                primary: true;
+                clicked => { Apps.add(); }
+            }
+        }
+    }
+    if Apps.rows.length > 0: ScrollView {
+        viewport-height: col.preferred-height;
+        viewport-width: self.visible-width;
+        col := VerticalLayout {
+            width: parent.visible-width;
+            spacing: 10px;
+            padding-right: 6px;
+            padding-bottom: 20px;
+            for a[i] in Apps.rows: AppCard {
+                app: a;
+                index: i;
+            }
+        }
+    }
+}

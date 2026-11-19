@@ -1,0 +1,64 @@
+// Rows the Rust side fills in.
+
+// A deployment of an app: one file it fetches and where it goes.
+export struct DepRow {
+    label: string,
+    installed: string,
+    latest: string,
+    status: string,
+    // 0 unknown, 1 up to date, 2 update available, 3 working, 4 error,
+    // 5 not installed.
+    tone: int,
+    // 0..1 while downloading; below 0 when not.
+    progress: float,
+    note: string,
+}
+
+export struct AppRow {
+    id: string,
+    name: string,
+    repo: string,
+    icon: image,
+    has-icon: bool,
+    letter: string,
+    deps: [DepRow],
+    busy: bool,
+    // Something to update (or install).
+    updatable: bool,
+}
+
+// A folder setting.
+export struct DirRow {
+    id: string,
+    label: string,
+    path: string,
+    detail: string,
+}
+
+// One line of a plan. tone: 0 heading, 1 download, 2 copy, 3 replace,
+// 4 delete, 5 keep, 6 write, 7 note, 8 warning.
+export struct PlanRow {
+    tone: int,
+    verb: string,
+    text: string,
+    detail: string,
+}
+
+// A file a release or run offers.
+export struct Cand {
+    name: string,
+    size: string,
+    kind: string,
+    // Not for this computer (another system, a checksum…): dimmed.
+    unlikely: bool,
+}
+
+export struct EdDep {
+    label: string,
+    detail: string,
+}
+
+export struct PickOpt {
+    text: string,
+    checked: bool,
+}

@@ -1,0 +1,459 @@
+// The building blocks (Chippy's), in Carlita's style: translucent black boxes
+// with hairline outlines, the theme's paint on whatever is on or picked.
+import { Theme } from "theme.slint";
+import { Icon, Icons } from "icons.slint";
+import { Tip, Tips } from "tooltip.slint";
+
+export { Tip, Tips }
+
+export component BigButton inherits Rectangle {
+    in property <string> text;
+    in property <string> icon-line;
+    in property <string> icon-solid;
+    in property <bool> primary: false;
+    // Destructive: red instead of the theme's paint.
+    in property <bool> danger: false;
+    in property <bool> enabled: true;
+    in property <string> tip;
+    callback clicked;
+
+    min-height: Theme.touch;
+    min-width: Theme.touch;
+    horizontal-stretch: 0;
+    border-radius: Theme.radius;
+    background: root.danger && root.enabled ? (touch.pressed ? Theme.danger.darker(25%) : Theme.danger)
+        : root.primary && root.enabled ? (touch.pressed ? Theme.paint-pressed : Theme.paint)
+        : touch.pressed ? Theme.pressed : Theme.surface-3;
+    border-width: 1px;
+    border-color: (root.primary || root.danger) && root.enabled ? transparent
+        : touch.has-hover ? Theme.border-hover : Theme.border-strong;
+    opacity: root.enabled ? 1 : 0.45;
+
+    HorizontalLayout {
+        padding-left: Theme.pad;
+        padding-right: Theme.pad;
+        spacing: 8px;
+        alignment: center;
+        if root.icon-line != "" || root.icon-solid != "": Icon {
+            y: (parent.height - self.height) / 2;
+            width: 20px;
+            height: 20px;
+            line: root.icon-line;
+            solid: root.icon-solid;
+            weight: 1.8;
+            tint: root.danger && root.enabled ? #ffffff : root.primary && root.enabled ? Theme.on-paint : Theme.text;
+        }
+        if root.text != "": Text {
+            text: root.text;
+            font-size: Theme.font;
+            font-weight: root.primary || root.danger ? Theme.regular : Theme.light;
+            vertical-alignment: center;
+            overflow: elide;
+            color: root.danger && root.enabled ? #ffffff : root.primary && root.enabled ? Theme.on-paint : Theme.text;
+        }
+    }
+    touch := TouchArea {
+        enabled: root.enabled;
+        clicked => { root.clicked(); }
+    }
+    Tip { text: root.tip; hover: touch.has-hover; pressed: touch.pressed; }
+}
+
+// A round icon button. `active` paints the icon (shuffle on, repeat on).
+export component IconButton inherits Rectangle {
+    in property <string> icon;
+    in property <string> icon-solid;
+    in property <bool> active;
+    in property <bool> enabled: true;
+    in property <bool> outlined: false;
+    in property <length> size: 40px;
+    in property <length> icon-size: 20px;
+    in property <float> weight: 1.8;
+    in property <string> tip;
+    callback clicked;
+    width: root.size;
+    height: root.size;
+    border-radius: root.size / 2;
+    background: touch.pressed ? Theme.pressed : touch.has-hover ? #ffffff0f : transparent;
+    border-width: root.outlined || touch.has-hover ? 1px : 0;
+    border-color: touch.has-hover ? Theme.border-hover : Theme.border-strong;
+    opacity: root.enabled ? 1 : 0.35;
+    Icon {
+        x: (parent.width - self.width) / 2;
+        y: (parent.height - self.height) / 2;
+        width: root.icon-size;
+        height: root.icon-size;
+        line: root.icon;
+        solid: root.icon-solid;
+        weight: root.weight;
+        tint: root.active ? Theme.paint : touch.has-hover ? Theme.text : Theme.text-dim;
+    }
+    if root.active: Rectangle {
+        y: parent.height - 6px;
+        x: (parent.width - self.width) / 2;
+        width: 4px;
+        height: 4px;
+        border-radius: 2px;
+        background: Theme.paint;
+    }
+    touch := TouchArea {
+        enabled: root.enabled;
+        clicked => { root.clicked(); }
+    }
+    Tip { text: root.tip; hover: touch.has-hover; pressed: touch.pressed; }
+}
+
+// The big round play button: the theme's paint.
+export component PlayButton inherits Rectangle {
+    in property <bool> playing;
+    in property <string> tip;
+    in property <length> size: 56px;
+    callback clicked;
+    width: root.size;
+    height: root.size;
+    border-radius: root.size / 2;
+    background: touch.pressed ? Theme.paint-pressed : Theme.paint;
+    drop-shadow-blur: touch.has-hover ? 18px : 10px;
+    drop-shadow-color: Theme.paint-b.transparentize(touch.has-hover ? 45% : 65%);
+    Icon {
+        x: (parent.width - self.width) / 2 + (root.playing ? 0 : 2px);
+        y: (parent.height - self.height) / 2;
+        width: root.size * 0.46;
+        height: self.width;
+        solid: root.playing ? Icons.pause-solid : Icons.play-solid;
+        tint: Theme.on-paint;
+    }
+    touch := TouchArea { clicked => { root.clicked(); } }
+    Tip { text: root.tip; hover: touch.has-hover; pressed: touch.pressed; }
+}
+
+// An on/off switch.
+export component Toggle inherits Rectangle {
+    in-out property <bool> checked;
+    in property <bool> enabled: true;
+    in property <string> tip;
+    callback toggled(bool);
+    width: 64px;
+    height: Theme.touch;
+    Rectangle {
+        width: 52px;
+        height: 28px;
+        border-radius: 14px;
+        background: root.checked ? Theme.paint : Theme.track;
+        border-width: 1px;
+        border-color: root.checked ? transparent : Theme.border-strong;
+        opacity: root.enabled ? 1 : 0.4;
+        Rectangle {
+            width: 22px;
+            height: 22px;
+            y: 3px;
+            x: root.checked ? parent.width - self.width - 3px : 3px;
+            border-radius: 11px;
+            background: root.checked ? Theme.on-paint : Theme.text-dim;
+            animate x { duration: 120ms; easing: ease-out; }
+        }
+    }
+    touch := TouchArea {
+        enabled: root.enabled;
+        clicked => {
+            root.checked = !root.checked;
+            root.toggled(root.checked);
+        }
+    }
+    Tip { text: root.tip; hover: touch.has-hover; pressed: touch.pressed; }
+}
+
+export component Chip inherits Rectangle {
+    in property <string> text;
+    in property <bool> selected;
+    in property <string> tip;
+    callback clicked;
+    height: 38px;
+    preferred-width: label.preferred-width + 28px;
+    horizontal-stretch: 0;
+    border-radius: 19px;
+    background: root.selected ? Theme.paint : touch.pressed ? Theme.pressed : Theme.surface-2;
+    border-width: 1px;
+    border-color: root.selected ? transparent : touch.has-hover ? Theme.border-hover : Theme.border-strong;
+    label := Text {
+        x: 14px;
+        width: parent.width - 28px;
+        text: root.text;
+        font-size: Theme.font-small;
+        font-weight: Theme.regular;
+        color: root.selected ? Theme.on-paint : Theme.text;
+        horizontal-alignment: center;
+        vertical-alignment: center;
+        overflow: elide;
+    }
+    touch := TouchArea { clicked => { root.clicked(); } }
+    Tip { text: root.tip; hover: touch.has-hover; pressed: touch.pressed; }
+}
+
+export component SectionTitle inherits Text {
+    font-size: Theme.font-small;
+    font-weight: Theme.regular;
+    color: Theme.text-dim;
+    letter-spacing: 1.5px;
+}
+
+// A row with a label (and a detail line) on the left and controls on the right.
+export component SettingRow inherits Rectangle {
+    in property <string> label;
+    in property <string> detail;
+    min-height: Theme.touch + 8px;
+    HorizontalLayout {
+        spacing: Theme.pad;
+        VerticalLayout {
+            alignment: center;
+            Text {
+                text: root.label;
+                font-size: Theme.font;
+                color: Theme.text;
+                wrap: word-wrap;
+            }
+            if root.detail != "": Text {
+                text: root.detail;
+                font-size: Theme.font-small;
+                font-weight: Theme.regular;
+                color: Theme.text-dim;
+                wrap: word-wrap;
+            }
+        }
+        @children
+    }
+}
+
+// A number with − and + buttons.
+export component Stepper inherits HorizontalLayout {
+    in property <string> text;
+    in property <string> tip;
+    callback step(int);
+    spacing: 6px;
+    alignment: end;
+    IconButton { icon: Icons.minimize-line; outlined: true; tip: root.tip; clicked => { root.step(-1); } }
+    Text {
+        text: root.text;
+        min-width: 64px;
+        horizontal-alignment: center;
+        vertical-alignment: center;
+        color: Theme.accent;
+        font-weight: Theme.regular;
+    }
+    IconButton { icon: "M 6 12 L 18 12 M 12 6 L 12 18"; outlined: true; tip: root.tip; clicked => { root.step(1); } }
+}
+
+// A one-line text box with an icon, a hint, and a clear button.
+export component TextField inherits Rectangle {
+    in-out property <string> text;
+    in property <string> placeholder;
+    in property <string> icon;
+    in property <bool> clearable: true;
+    out property <bool> has-focus: input.has-focus;
+    callback edited(string);
+    callback accepted(string);
+    callback escape;
+    callback down;
+    height: 38px;
+    border-radius: 10px;
+    background: Theme.surface-2;
+    border-width: 1px;
+    border-color: input.has-focus ? Theme.paint-b : touch.has-hover ? Theme.border-hover : Theme.border-strong;
+
+    public function focus-input() { input.focus(); }
+    public function select-all() { input.select-all(); }
+
+    touch := TouchArea {
+        mouse-cursor: MouseCursor.text;
+        clicked => { input.focus(); }
+    }
+    HorizontalLayout {
+        padding-left: root.icon != "" ? 8px : 12px;
+        padding-right: 6px;
+        spacing: 6px;
+        if root.icon != "": Icon {
+            y: (parent.height - self.height) / 2;
+            width: 18px;
+            height: 18px;
+            line: root.icon;
+            weight: 1.8;
+            tint: Theme.text-dim;
+        }
+        Rectangle {
+            clip: true;
+            if root.text == "": Text {
+                x: 0;
+                width: parent.width;
+                text: root.placeholder;
+                color: Theme.text-faint;
+                vertical-alignment: center;
+                font-size: Theme.font-small + 1px;
+                overflow: elide;
+            }
+            input := TextInput {
+                x: 0;
+                width: parent.width;
+                text <=> root.text;
+                color: Theme.text;
+                font-size: Theme.font-small + 1px;
+                vertical-alignment: center;
+                single-line: true;
+                selection-background-color: Theme.paint-c.transparentize(40%);
+                selection-foreground-color: #ffffff;
+                edited => { root.edited(self.text); }
+                accepted => { root.accepted(self.text); }
+                key-pressed(e) => {
+                    if e.text == Key.Escape { root.escape(); return accept; }
+                    if e.text == Key.DownArrow { root.down(); return accept; }
+                    reject
+                }
+            }
+        }
+        if root.clearable && root.text != "": IconButton {
+            y: (parent.height - self.height) / 2;
+            size: 26px;
+            icon-size: 14px;
+            icon: Icons.close;
+            clicked => {
+                root.text = "";
+                root.edited("");
+                input.focus();
+            }
+        }
+    }
+}
+
+// A horizontal slider: a thin track that thickens under the mouse, with a
+// knob that shows while hovering or dragging. `changed` fires while
+// dragging, `released` once at the end (seek on release).
+export component Scrubber inherits Rectangle {
+    in property <float> value; // 0..1
+    in property <bool> enabled: true;
+    in property <string> tip;
+    out property <bool> dragging: touch.pressed;
+    out property <float> drag-value: root.drag-fraction;
+    out property <bool> hovered: touch.has-hover;
+    out property <float> hover-value: max(0, min(1, touch.mouse-x / root.width));
+    callback changed(float);
+    callback released(float);
+    height: 24px;
+    property <float> drag-fraction;
+    property <float> shown: touch.pressed ? root.drag-fraction : root.value;
+    property <bool> lit: touch.has-hover || touch.pressed;
+
+    track := Rectangle {
+        y: (parent.height - self.height) / 2;
+        height: root.lit ? 6px : 4px;
+        border-radius: self.height / 2;
+        background: Theme.track;
+        animate height { duration: 100ms; }
+        Rectangle {
+            x: 0;
+            width: parent.width * max(0, min(1, root.shown));
+            border-radius: parent.border-radius;
+            background: Theme.paint;
+        }
+    }
+    if root.lit && root.enabled: Rectangle {
+        x: (root.width) * max(0, min(1, root.shown)) - self.width / 2;
+        y: (root.height - self.height) / 2;
+        width: 14px;
+        height: 14px;
+        border-radius: 7px;
+        background: Theme.text;
+        drop-shadow-blur: 6px;
+        drop-shadow-color: #00000099;
+    }
+    touch := TouchArea {
+        enabled: root.enabled;
+        pointer-event(e) => {
+            if e.kind == PointerEventKind.down && e.button == PointerEventButton.left {
+                root.drag-fraction = max(0, min(1, self.mouse-x / root.width));
+                root.changed(root.drag-fraction);
+            }
+            if e.kind == PointerEventKind.up && e.button == PointerEventButton.left {
+                root.released(root.drag-fraction);
+            }
+        }
+        moved => {
+            if self.pressed {
+                root.drag-fraction = max(0, min(1, self.mouse-x / root.width));
+                root.changed(root.drag-fraction);
+            }
+        }
+        scroll-event(e) => {
+            if e.delta-y != 0 {
+                root.released(max(0, min(1, root.value + (e.delta-y > 0 ? 0.03 : -0.03))));
+                return accept;
+            }
+            reject
+        }
+    }
+    Tip { text: root.tip; hover: touch.has-hover && !touch.pressed; pressed: touch.pressed; }
+}
+
+// A small stereo level meter, two thin horizontal bars.
+component MeterBar inherits Rectangle {
+    in property <float> level;
+    in property <length> full-width;
+    height: 4px;
+    border-radius: 2px;
+    background: Theme.track;
+    clip: true;
+    // The gradient spans the whole meter; only the lit part shows.
+    Rectangle {
+        x: 0;
+        width: parent.width * min(1, root.level);
+        clip: true;
+        Rectangle {
+            x: 0;
+            width: root.full-width;
+            border-radius: 2px;
+            background: @linear-gradient(90deg, Theme.ok 0%, Theme.ok 62%, Theme.warn 84%, Theme.danger 100%);
+        }
+    }
+}
+
+// Two fixed bars, not a repeater over [left, right]: that array is rebuilt
+// on every level change, which dropped the bars while they were drawn.
+export component LevelMeter inherits Rectangle {
+    in property <float> left;
+    in property <float> right;
+    height: 12px;
+    VerticalLayout {
+        spacing: 3px;
+        MeterBar { level: root.left; full-width: root.width; }
+        MeterBar { level: root.right; full-width: root.width; }
+    }
+}
+
+// A line of a popup menu, optionally with a tick.
+export component MenuItem inherits Rectangle {
+    in property <string> text;
+    in property <bool> checked;
+    in property <bool> checkable;
+    callback clicked;
+    height: 36px;
+    border-radius: 6px;
+    background: touch.has-hover ? #ffffff14 : transparent;
+    HorizontalLayout {
+        padding-left: 10px;
+        padding-right: 10px;
+        spacing: 8px;
+        if root.checkable: Icon {
+            y: (parent.height - self.height) / 2;
+            width: 16px;
+            height: 16px;
+            line: root.checked ? Icons.check : "";
+            weight: 2.2;
+            tint: Theme.paint;
+        }
+        Text {
+            text: root.text;
+            color: Theme.text;
+            font-size: Theme.font-small + 1px;
+            vertical-alignment: center;
+        }
+    }
+    touch := TouchArea { clicked => { root.clicked(); } }
+}
