@@ -440,7 +440,17 @@ impl App {
         let app = self.library.apps[i].clone();
         let deps: Vec<DepRow> = app.deployments.iter().map(|d| self.dep_row(&app, d)).collect();
         let busy = deps.iter().any(|d| d.tone == 3);
-        let updatable = deps.iter().any(|d| d.tone == 2 || d.tone == 5);
+        // The same rule as Update all: something newer upstream, or not
+        // installed yet (an error since does not hide it, so it can be
+        // retried).
+        let updatable = app.deployments.iter().any(|d| {
+            d.installed.is_none()
+                || self
+                    .status
+                    .get(&(app.id.clone(), d.id.clone()))
+                    .and_then(|s| s.remote.as_ref())
+                    .is_some_and(|r| d.installed.as_ref().is_some_and(|i| i.key != r.key))
+        });
         let icon = self.icon_for(&app);
         AppRow {
             id: app.id.clone().into(),
@@ -1012,15 +1022,19 @@ impl App {
                 }
             }
         }
+        let mut removed = None;
         if let Some(id) = pending.and_then(|p| p.remove_app) {
             if errors.is_empty() {
+                removed = self.library.app(&id).map(|a| a.name.clone());
                 self.drop_app(&id);
             }
         }
         self.save_library();
         self.refresh_rows();
         self.sync_prefs();
-        if errors.is_empty() {
+        if let Some(name) = removed {
+            self.toast(&format!("Removed {name} and its files"), false);
+        } else if errors.is_empty() {
             self.toast(&format!("Done: {ok} item{}", if ok == 1 { "" } else { "s" }), false);
         } else {
             self.toast(&errors.join("\n"), true);

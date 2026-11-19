@@ -210,6 +210,9 @@ export component MainWindow inherits Window {
     public function focus-main() { keys.focus(); }
 
     changed right-pos => { Tips.hide(); }
+    // A tip whose control went with a dialog would stay behind.
+    property <bool> any-dialog: Editor.shown || PlanView.shown || Picker.shown || Confirm.shown;
+    changed any-dialog => { Tips.hide(); }
 
     forward-focus: keys;
     keys := FocusScope {
