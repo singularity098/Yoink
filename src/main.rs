@@ -10,7 +10,7 @@ fn main() -> anyhow::Result<()> {
         }
         Some("--help" | "-h") => {
             println!(
-                "Usage: yoink [--probe OWNER/REPO [releases|actions|pre] [PATTERN]]\n\n\
+                "Usage: yoink [--probe OWNER/REPO [releases|pre|actions[:BRANCH]] [PATTERN]]\n\n\
                  With no arguments, opens the window.\n\
                  --probe shows what a repository offers and, with a pattern, the build it\n\
                  would install (no downloads).\n\n\

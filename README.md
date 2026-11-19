@@ -79,7 +79,7 @@ cargo build --release
 Needs Rust 1.88 or newer, and the fontconfig and xkbcommon development
 packages. Skia renders by default; `--no-default-features` uses femtovg.
 
-`yoink --probe owner/name [releases|pre|actions] [PATTERN]` shows what a
+`yoink --probe owner/name [releases|pre|actions[:BRANCH]] [PATTERN]` shows what a
 repository offers and which build a pattern resolves to, without
 downloading anything. `yoink --inspect FILE` shows what Yoink finds inside
 a package.

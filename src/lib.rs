@@ -34,9 +34,9 @@ pub fn probe(args: &[String]) -> anyhow::Result<()> {
     let repo = args.first().ok_or_else(|| anyhow::anyhow!("--probe needs OWNER/REPO"))?;
     let source = Source::parse(repo).ok_or_else(|| anyhow::anyhow!("not a repository: {repo}"))?;
     let channel = match args.get(1).map(String::as_str) {
-        Some("actions") => Channel::Actions {
+        Some(a) if a.starts_with("actions") => Channel::Actions {
             workflow: String::new(),
-            branch: String::new(),
+            branch: a.split_once(':').map(|(_, b)| b.to_string()).unwrap_or_default(),
         },
         Some("pre") => Channel::Releases { prerelease: true },
         _ => Channel::Releases { prerelease: false },
