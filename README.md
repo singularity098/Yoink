@@ -45,13 +45,13 @@ file that will be downloaded, copied, replaced, kept and deleted. Only
   just stop managing it.
 * **Options** (the gear, or `,`) slide out from the right: the folders, the
   GitHub token (kept in your keyring), the theme, and Yoink's own entry.
-* **Yoink in the applications menu**: Options → Yoink → *Show Yoink in the
-  applications menu* writes `yoink.desktop` to your Desktop entries folder
-  and `yoink.svg` to your Icons folder (the same folders as every other
-  app's), pointed at the Yoink executable (and kept pointed at it if it
-  moves, and moved along if you change those folders); turning it off
-  removes them. From a terminal: `yoink --install-desktop`
-  and `yoink --remove-desktop`. An entry a package installed is left alone.
+* **Yoink in the applications menu**: Yoink keeps itself up to date as one
+  of your apps (Options → Yoink → *Add Yoink to your apps*), and its desktop
+  entry follows that deployment's *desktop entry* setting, exactly like any
+  other app's: `yoink.desktop` and `yoink.svg` go to your Desktop entries
+  and Icons folders, pointed at where Yoink was delivered, and are removed
+  with it. (An entry written by the switch older versions had in Options is
+  replaced at the next update, or removed if the setting is off.)
 * **Desktop entries in a synced folder** (KDE Plasma): desktops only look
   for apps in `~/.local/share/applications` and the system's folders. Set
   the desktop entries folder to an `applications` folder anywhere (say
@@ -78,6 +78,13 @@ fine-grained token with read access to *Contents* and *Actions* (or a
 classic token with no scopes, for public repositories) is enough. It is
 stored in the desktop's keyring (Secret Service), or in
 `~/.config/yoink/token` (readable only by you) where there is none.
+
+Options warns when the token reaches further than Yoink needs. A warning
+about access that only reads (a fine-grained token that can see private
+repositories, or classic `read:` scopes) can be dismissed, and comes back
+for another token; one about a token that can write stays. GitHub does not
+say what a fine-grained token may do, so dismiss it only if yours is
+read-only.
 
 Any program running as you can read the keyring once it is unlocked, so
 give Yoink a token that would be worth little to anyone else. When a token

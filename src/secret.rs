@@ -94,7 +94,28 @@ fn write_private(token: &str) -> anyhow::Result<()> {
 /// when it can do more than Yoink needs.
 pub struct Check {
     pub note: String,
-    pub warning: Option<String>,
+    pub warning: Option<Warning>,
+}
+
+/// Something worth knowing about the token's reach.
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct Warning {
+    pub text: String,
+    /// It only reads more than Yoink needs (it cannot change anything), so
+    /// once read it can be put away. A token that can write keeps it.
+    pub dismissible: bool,
+}
+
+/// A short fingerprint of a token, to remember a dismissed warning by
+/// without keeping the token itself in the settings.
+pub fn fingerprint(token: &str) -> String {
+    use sha2::{Digest, Sha256};
+    hex::encode(&Sha256::digest(token.trim().as_bytes())[..8])
+}
+
+/// Classic scopes that only read.
+fn read_only_scope(scope: &str) -> bool {
+    scope.starts_with("read:") || scope == "user:email"
 }
 
 /// Asks GitHub about the token. Yoink only reads releases, Actions runs and
@@ -146,19 +167,35 @@ pub fn check(token: &str) -> Check {
 
 /// The warning for a token with these classic scopes (None: a fine-grained
 /// token) that can or cannot see private repositories.
-fn warning(scopes: Option<&str>, sees_private: Option<bool>) -> Option<String> {
+fn warning(scopes: Option<&str>, sees_private: Option<bool>) -> Option<Warning> {
     match scopes {
         Some(s) => {
             let list: Vec<&str> = s.split(',').map(str::trim).filter(|s| !s.is_empty()).collect();
-            (!list.is_empty()).then(|| {
-                format!(
+            if list.is_empty() {
+                return None;
+            }
+            if list.iter().all(|s| read_only_scope(s)) {
+                return Some(Warning {
+                    text: format!(
+                        "This token can read more than Yoink needs ({}), though it cannot change anything. For public repositories, a classic token with no scopes is enough.",
+                        list.join(", ")
+                    ),
+                    dismissible: true,
+                });
+            }
+            Some(Warning {
+                text: format!(
                     "This token has more access than Yoink needs ({}). If it leaked, it could be used to change your repositories or account. For public repositories, a classic token with no scopes is enough.",
                     list.join(", ")
-                )
+                ),
+                dismissible: false,
             })
         }
-        None => (sees_private == Some(true)).then(|| {
-            "This token can see private repositories. If Yoink only needs public ones, a fine-grained token limited to public repositories (read-only) is safer if it leaks.".to_string()
+        // GitHub does not tell what a fine-grained token may do, only what
+        // it can see.
+        None => (sees_private == Some(true)).then(|| Warning {
+            text: "This token can see private repositories. If Yoink only needs public ones, a fine-grained token limited to public repositories is safer if it leaks. Yoink cannot tell a fine-grained token's permissions: dismiss this only if it is read-only.".to_string(),
+            dismissible: true,
         }),
     }
 }
@@ -171,13 +208,32 @@ mod tests {
     fn warns_about_scopes() {
         assert_eq!(warning(Some(""), None), None);
         let w = warning(Some("repo, workflow"), None).unwrap();
-        assert!(w.contains("(repo, workflow)"), "{w}");
+        assert!(w.text.contains("(repo, workflow)"), "{w:?}");
+        assert!(!w.dismissible);
+        // Writing anything keeps the warning.
+        assert!(!warning(Some("read:org, gist"), None).unwrap().dismissible);
+    }
+
+    #[test]
+    fn read_only_scopes_can_be_dismissed() {
+        let w = warning(Some("read:org, read:user"), None).unwrap();
+        assert!(w.dismissible);
+        assert!(w.text.contains("(read:org, read:user)"), "{w:?}");
     }
 
     #[test]
     fn warns_about_private_access() {
         assert_eq!(warning(None, Some(false)), None);
         assert_eq!(warning(None, None), None);
-        assert!(warning(None, Some(true)).unwrap().contains("private"));
+        let w = warning(None, Some(true)).unwrap();
+        assert!(w.text.contains("private"));
+        assert!(w.dismissible);
+    }
+
+    #[test]
+    fn fingerprints_differ() {
+        assert_eq!(super::fingerprint("abc").len(), 16);
+        assert_eq!(super::fingerprint("abc"), super::fingerprint(" abc\n"));
+        assert_ne!(super::fingerprint("abc"), super::fingerprint("abd"));
     }
 }

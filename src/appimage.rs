@@ -77,34 +77,33 @@ pub fn read(path: &Path) -> anyhow::Result<AppImageInfo> {
         }
         false
     };
-    if !try_icon(Path::new(".DirIcon")) {
-        if let Some(icon) = icon_name {
-            let mut tried = false;
-            for ext in ["svg", "png"] {
-                if try_icon(Path::new(&format!("{icon}.{ext}"))) {
-                    tried = true;
-                    break;
-                }
-            }
-            if !tried {
-                // The icon theme inside, largest first.
-                let mut found: Vec<PathBuf> = fs
-                    .files()
-                    .map(|n| norm(&n.fullpath))
-                    .filter(|p| {
-                        let s = p.to_string_lossy();
-                        s.contains("icons/hicolor/")
-                            && (s.ends_with(&format!("/{icon}.svg"))
-                                || s.ends_with(&format!("/{icon}.png")))
-                    })
-                    .collect();
-                found.sort_by_key(|p| std::cmp::Reverse(icon_rank(p)));
-                for p in found {
-                    if try_icon(&p) {
-                        break;
-                    }
-                }
-            }
+    // A scalable icon first (it stays sharp at any size), then `.DirIcon`
+    // (often a PNG), then the named icon at the root and in the icon theme
+    // inside, largest first.
+    let mut candidates: Vec<PathBuf> = Vec::new();
+    let mut themed: Vec<PathBuf> = Vec::new();
+    if let Some(icon) = &icon_name {
+        themed = fs
+            .files()
+            .map(|n| norm(&n.fullpath))
+            .filter(|p| {
+                let s = p.to_string_lossy();
+                s.contains("icons/hicolor/")
+                    && (s.ends_with(&format!("/{icon}.svg")) || s.ends_with(&format!("/{icon}.png")))
+            })
+            .collect();
+        themed.sort_by_key(|p| std::cmp::Reverse(icon_rank(p)));
+        candidates.push(PathBuf::from(format!("{icon}.svg")));
+        candidates.extend(themed.iter().filter(|p| p.extension().is_some_and(|e| e == "svg")).cloned());
+    }
+    candidates.push(PathBuf::from(".DirIcon"));
+    if let Some(icon) = &icon_name {
+        candidates.push(PathBuf::from(format!("{icon}.png")));
+        candidates.extend(themed.into_iter().filter(|p| p.extension().is_some_and(|e| e == "png")));
+    }
+    for p in candidates {
+        if try_icon(&p) {
+            break;
         }
     }
     Ok(info)

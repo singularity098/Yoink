@@ -78,6 +78,9 @@ pub struct Task {
     pub actions: Vec<Action>,
     /// Everything this deployment will have in place afterwards.
     pub new_files: Vec<PathBuf>,
+    /// The program it delivers (an AppImage, or the main executable in the
+    /// bin folder): what a restart runs when this is Yoink itself.
+    pub exe: Option<PathBuf>,
     /// The icon found in the package, for the app's own icon.
     pub icon: Option<(Vec<u8>, &'static str, IconSource)>,
     /// Removes the app (or a deployment) rather than installing.
@@ -426,6 +429,7 @@ pub fn build(
         actions.push(Action::Note(remote.note.clone()));
     }
     let mut new_files: Vec<PathBuf> = Vec::new();
+    let mut exe: Option<PathBuf> = None;
     let mut icon: Option<(Vec<u8>, &'static str, IconSource)> = None;
     let root = staged.unpacked.as_deref();
     let c = &staged.contents;
@@ -501,9 +505,11 @@ pub fn build(
             };
             let dest = target_dir.join(file_name(&src));
             install(&mut actions, &mut new_files, src.clone(), dest.clone(), false, is_appimage);
-            let yoink = is_appimage && app.is_yoink();
-            if yoink {
-                yoink_notes(&dest, dep.desktop, &mut actions);
+            if is_appimage {
+                exe = Some(dest.clone());
+            }
+            if is_appimage && app.is_yoink() {
+                yoink_notes(&dest, &mut actions);
             }
             if is_appimage {
                 let info = crate::appimage::read(&src).unwrap_or_else(|e| {
@@ -513,7 +519,7 @@ pub fn build(
                 if let Some((bytes, ext)) = &info.icon {
                     icon = Some((bytes.clone(), ext, IconSource::AppImage));
                 }
-                if dep.desktop && !yoink {
+                if dep.desktop {
                     desktop_actions(ctx, app, dep, &dest, info.desktop, icon.as_ref(), &mut actions, &mut new_files)?;
                 }
             }
@@ -536,9 +542,11 @@ pub fn build(
                 // A bare executable.
                 let dest = bin.join(exe_name(file_name(&staged.file)));
                 install(&mut actions, &mut new_files, staged.file.clone(), dest.clone(), false, true);
+                exe = Some(dest.clone());
                 if yoink {
-                    yoink_notes(&dest, dep.desktop, &mut actions);
-                } else if dep.desktop {
+                    yoink_notes(&dest, &mut actions);
+                }
+                if dep.desktop {
                     desktop_actions(ctx, app, dep, &dest, None, None, &mut actions, &mut new_files)?;
                 }
             } else {
@@ -610,7 +618,7 @@ pub fn build(
                     let dest = bin.join(exe_name(file_name(p)));
                     install(&mut actions, &mut new_files, root.join(p), dest.clone(), false, true);
                     if yoink {
-                        yoink_notes(&dest, dep.desktop, &mut actions);
+                        yoink_notes(&dest, &mut actions);
                     }
                     main_exe = Some(dest);
                     let others = c.executables.len() + c.shared_libs.len() - 1;
@@ -622,7 +630,8 @@ pub fn build(
                         )));
                     }
                 }
-                if dep.desktop && !yoink {
+                exe = main_exe.clone();
+                if dep.desktop {
                     if shipped_desktop {
                         actions.push(Action::Note("the package brings its own desktop entry (in share/applications)".into()));
                     } else if let Some(exe) = &main_exe {
@@ -724,6 +733,7 @@ pub fn build(
         remote: Some(remote.clone()),
         actions,
         new_files,
+        exe,
         icon,
         removal: false,
         staging: Some(staged.dir.clone()),
@@ -756,9 +766,8 @@ fn same_file(a: &Path, b: &Path) -> bool {
 
 /// Yoink updating itself: the executable it runs from is its own to
 /// replace (the new one is renamed into place, so the running copy is
-/// untouched until it restarts), and its menu entry is the one Options
-/// manages.
-fn yoink_notes(dest: &Path, desktop: bool, actions: &mut Vec<Action>) {
+/// untouched until it restarts).
+fn yoink_notes(dest: &Path, actions: &mut Vec<Action>) {
     let running = running_exe();
     let replaces_running = running.as_deref().is_some_and(|r| same_file(r, dest));
     if replaces_running {
@@ -778,12 +787,6 @@ fn yoink_notes(dest: &Path, desktop: bool, actions: &mut Vec<Action>) {
             "Yoink now runs from {}; restarting runs the one installed here (the other is left alone)",
             tilde(r)
         )));
-    }
-    if desktop {
-        actions.push(Action::Note(
-            "no desktop entry is written for it: Yoink's own is set in Options, and follows wherever Yoink runs from"
-                .into(),
-        ));
     }
 }
 
@@ -823,7 +826,26 @@ fn desktop_actions(
 ) -> anyhow::Result<()> {
     let desktop_dir = ctx.dirs.path("desktop")?;
     let icon_dir = ctx.dirs.path("icons")?;
-    let slug = app.slug();
+    let yoink = app.is_yoink();
+    // Yoink brings its entry and icon built in, named after its window's app
+    // id (so the taskbar matches them), when the package has none.
+    let own_icon;
+    let (shipped, package_icon, slug) = if yoink {
+        own_icon = (crate::desktop::own_icon().to_vec(), "svg", IconSource::AppImage);
+        (
+            shipped.or_else(|| Some(crate::desktop::own_template())),
+            package_icon.or(Some(&own_icon)),
+            crate::desktop::APP_ID.to_string(),
+        )
+    } else {
+        (shipped, package_icon, app.slug())
+    };
+    // An entry Yoink wrote for itself (and its icon) is its own deployment's
+    // to replace.
+    let existing = |dest: &Path| match ctx.existing(dest, dep) {
+        Existing::Foreign if yoink && crate::desktop::is_own_file(ctx.dirs, dest) => Existing::Ours,
+        e => e,
+    };
     // The icon: the package's own, else the app's (unless picked by hand,
     // the package's wins).
     let custom = app.icon_source == IconSource::Custom;
@@ -839,7 +861,7 @@ fn desktop_actions(
     let mut icon_path = None;
     if let Some((bytes, ext)) = icon_bytes {
         let dest = icon_dir.join(format!("{slug}.{ext}"));
-        let existing = ctx.existing(&dest, dep);
+        let existing = existing(&dest);
         actions.push(Action::Write {
             dest: dest.clone(),
             contents: bytes,
@@ -860,7 +882,7 @@ fn desktop_actions(
         ),
     };
     let dest = desktop_dir.join(sanitize_name(&name));
-    let existing = ctx.existing(&dest, dep);
+    let existing = existing(&dest);
     actions.push(Action::Write {
         dest: dest.clone(),
         contents: text.into_bytes(),
@@ -924,6 +946,7 @@ pub fn removal(app: &App, dep: Option<&str>) -> Task {
         remote: None,
         actions,
         new_files: Vec::new(),
+        exe: None,
         icon: None,
         removal: true,
         staging: None,

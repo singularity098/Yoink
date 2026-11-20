@@ -15,6 +15,9 @@ export global Prefs {
     in property <bool> has-token;
     in property <string> token-status;
     in property <string> token-warning;
+    // A warning about access that only reads can be put away (per token).
+    in property <bool> token-warning-dismissible;
+    callback dismiss-token-warning();
     callback save-token(string);
     callback clear-token();
 
@@ -36,12 +39,6 @@ export global Prefs {
     in property <bool> self-listed;
     callback add-self();
     in property <string> config-path;
-    // Yoink's own desktop entry: in the applications menu, and whether a
-    // package put it there (then it is not Yoink's to remove).
-    in property <bool> in-menu;
-    in property <bool> menu-locked;
-    in property <string> menu-status;
-    callback set-in-menu(bool);
     // KDE Plasma told at login to look in the desktop entries folder (a
     // script on this computer, read from the disk, never from settings).
     in property <bool> plasma-on;
@@ -195,11 +192,21 @@ export component OptionsPanel inherits Rectangle {
                             clicked => { root.interacted(); Prefs.clear-token(); }
                         }
                     }
-                    if Prefs.token-warning != "": Text {
-                        text: Prefs.token-warning;
-                        color: Theme.warn.brighter(20%);
-                        font-size: Theme.font-small;
-                        wrap: word-wrap;
+                    if Prefs.token-warning != "": HorizontalLayout {
+                        spacing: 8px;
+                        Text {
+                            text: Prefs.token-warning;
+                            color: Theme.warn.brighter(20%);
+                            font-size: Theme.font-small;
+                            wrap: word-wrap;
+                            horizontal-stretch: 1;
+                            vertical-alignment: center;
+                        }
+                        if Prefs.token-warning-dismissible: BigButton {
+                            text: "Dismiss";
+                            tip: "This token only reads: hide this warning (another token shows it again)";
+                            clicked => { root.interacted(); Prefs.dismiss-token-warning(); }
+                        }
                     }
                     HorizontalLayout {
                         spacing: 8px;
@@ -337,15 +344,6 @@ export component OptionsPanel inherits Rectangle {
                             primary: !Prefs.self-listed;
                             tip: Prefs.self-listed ? "Change where Yoink's updates come from" : "Opens the editor on Yoink's repository: pick the Linux binary, from Releases or Actions";
                             clicked => { root.interacted(); Prefs.add-self(); }
-                        }
-                    }
-                    SettingRow {
-                        label: "Show Yoink in the applications menu";
-                        detail: Prefs.menu-status;
-                        Toggle {
-                            checked: Prefs.in-menu;
-                            enabled: !Prefs.menu-locked;
-                            toggled(v) => { root.interacted(); Prefs.set-in-menu(v); }
                         }
                     }
                     Text {

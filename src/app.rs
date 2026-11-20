@@ -5,7 +5,7 @@
 
 use std::cell::RefCell;
 use std::collections::{HashMap, VecDeque};
-use std::path::PathBuf;
+use std::path::{Path, PathBuf};
 use std::rc::Rc;
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::Arc;
@@ -114,7 +114,7 @@ pub struct App {
     token_store: Option<secret::Store>,
     token_note: String,
     /// The token can do more than Yoink needs.
-    token_warning: Option<String>,
+    token_warning: Option<secret::Warning>,
     status: HashMap<(String, String), DepState>,
     rows: Rc<VecModel<AppRow>>,
     /// The library index of each row, in the order the list is sorted.
@@ -170,6 +170,7 @@ pub fn run() -> anyhow::Result<()> {
     {
         let mut a = app.borrow_mut();
         a.init_ui();
+        a.retire_menu_entry();
         if let Some(t) = a.token.clone() {
             check_token(t);
         }
@@ -246,10 +247,16 @@ fn connect(ui: &MainWindow) {
         a.sync_prefs();
         a.toast("Token removed", false);
     });
+    on!(p, on_dismiss_token_warning, |a| {
+        if let Some(t) = &a.token {
+            a.settings.token_warning_dismissed = secret::fingerprint(t);
+            a.save_settings();
+            a.sync_prefs();
+        }
+    });
     on!(p, on_set_theme, |a, i: i32| a.set_theme(i));
     on!(p, on_set_flag, |a, id: SharedString, v: bool| a.set_flag(&id, v));
     on!(p, on_add_self, |a| a.add_self());
-    on!(p, on_set_in_menu, |a, v: bool| a.set_in_menu(v));
     on!(p, on_set_plasma, |a, v: bool| a.set_plasma(v));
 
     let e = ui.global::<Editor>();
@@ -384,6 +391,32 @@ fn check_token(token: String) {
     });
 }
 
+/// Starts `exe` on its own. Yoink's files are its own, so a missing
+/// executable bit is put back first (a plain copy can lose it); a folder
+/// mounted `noexec` still refuses, and says so.
+fn spawn_exe(exe: &Path) -> std::io::Result<()> {
+    use std::os::unix::fs::PermissionsExt;
+    if let Ok(m) = std::fs::metadata(exe) {
+        let mode = m.permissions().mode();
+        if mode & 0o100 == 0 {
+            let _ = std::fs::set_permissions(exe, std::fs::Permissions::from_mode(mode | 0o755));
+        }
+    }
+    let mut cmd = std::process::Command::new(exe);
+    // Not the old AppImage's mount: the new one sets these itself.
+    for var in ["APPIMAGE", "APPDIR", "ARGV0", "OWD"] {
+        cmd.env_remove(var);
+    }
+    match cmd.spawn() {
+        Ok(_) => Ok(()),
+        Err(e) if e.kind() == std::io::ErrorKind::PermissionDenied => Err(std::io::Error::new(
+            e.kind(),
+            format!("{e} (is its folder mounted noexec?)"),
+        )),
+        Err(e) => Err(e),
+    }
+}
+
 /// The first line of an error, for a status line.
 fn short(e: &anyhow::Error) -> String {
     let s = e.to_string();
@@ -431,9 +464,16 @@ impl App {
                 return Some(img.clone());
             }
         }
-        let img = Image::load_from_path(&path).ok()?;
+        let img = crate::icons::smooth(Image::load_from_path(&path).ok()?, self.icon_px());
         self.icons.insert(app.id.clone(), (path, img.clone()));
         Some(img)
+    }
+
+    /// The size app icons are drawn at, in physical pixels (the largest
+    /// shown: 56 px tile in the editor, the image 84% of it).
+    fn icon_px(&self) -> u32 {
+        let scale = self.ui.upgrade().map(|u| u.window().scale_factor()).unwrap_or(1.0);
+        (48.0 * scale.max(1.0)).ceil() as u32
     }
 
     fn dep_row(&self, app: &LibApp, d: &Deployment) -> DepRow {
@@ -1079,7 +1119,7 @@ impl App {
             match r {
                 Ok(()) => {
                     if is_yoink && matches!(dep.kind, Kind::AppImage | Kind::Binary) {
-                        if let Some(exe) = t.new_files.first() {
+                        if let Some(exe) = &t.exe {
                             self.restart_into = Some(exe.clone());
                             yoink_updated = Some(t.to.clone());
                         }
@@ -1399,6 +1439,7 @@ impl App {
             }
             None => ed.app.icon_path().and_then(|p| Image::load_from_path(&p).ok()),
         };
+        let img = img.map(|i| crate::icons::smooth(i, self.icon_px()));
         e.set_has_icon(img.is_some());
         e.set_icon(img.unwrap_or_default());
         let name = e.get_name();
@@ -1931,7 +1972,15 @@ impl App {
             .collect();
         p.set_dirs(ModelRc::new(VecModel::from(dirs)));
         p.set_has_token(self.token.is_some());
-        p.set_token_warning(self.token_warning.clone().unwrap_or_default().into());
+        let warning = self.token_warning.as_ref().filter(|w| {
+            !(w.dismissible
+                && self.token.as_deref().is_some_and(|t| {
+                    !self.settings.token_warning_dismissed.is_empty()
+                        && secret::fingerprint(t) == self.settings.token_warning_dismissed
+                }))
+        });
+        p.set_token_warning(warning.map(|w| w.text.clone()).unwrap_or_default().into());
+        p.set_token_warning_dismissible(warning.is_some_and(|w| w.dismissible));
         p.set_token_status(
             match (&self.token, self.token_store) {
                 (Some(_), Some(s)) => {
@@ -1959,14 +2008,6 @@ impl App {
         p.set_app_subdirs(self.settings.dirs.app_subdirs);
         p.set_version(version_label().into());
         self.sync_self();
-        let (in_menu, menu_status, menu_locked) = match crate::desktop::own_entry(&self.settings.dirs) {
-            crate::desktop::OwnEntry::Shown(path) => (true, format!("In the menu: {}", tilde(&path)), false),
-            crate::desktop::OwnEntry::System(path) => (true, format!("Installed by a package: {}", tilde(&path)), true),
-            _ => (false, "Adds a desktop entry and icon to your Desktop entries and Icons folders.".to_string(), false),
-        };
-        p.set_in_menu(in_menu);
-        p.set_menu_status(menu_status.into());
-        p.set_menu_locked(menu_locked);
         let plasma = crate::plasma::state(&self.settings.dirs);
         p.set_plasma_on(plasma.present());
         p.set_plasma_enabled(plasma.present() || matches!(plasma, crate::plasma::State::Missing(_)));
@@ -1986,14 +2027,8 @@ impl App {
         if self.settings.dirs.get(id) == path {
             return;
         }
-        let old = self.settings.dirs.clone();
         self.settings.dirs.set(id, path);
         self.save_settings();
-        if matches!(id, "desktop" | "icons") {
-            if let Err(e) = crate::desktop::relocate_own_entry(&old, &self.settings.dirs) {
-                self.toast(&format!("Could not move Yoink's desktop entry: {e:#}"), true);
-            }
-        }
         if id == "desktop" {
             match crate::plasma::follow(&self.settings.dirs) {
                 Ok(Some(_)) => self.toast("Plasma will look in the new folder from the next login", false),
@@ -2067,20 +2102,6 @@ impl App {
         self.sync_prefs();
     }
 
-    fn set_in_menu(&mut self, v: bool) {
-        let result = if v {
-            crate::desktop::install_own_entry(&self.settings.dirs).map(drop)
-        } else {
-            crate::desktop::remove_own_entry(&self.settings.dirs)
-        };
-        match result {
-            Ok(()) if v => self.toast("Yoink is in the applications menu", false),
-            Ok(()) => self.toast("Yoink is out of the applications menu", false),
-            Err(e) => self.toast(&format!("Could not change the desktop entry: {e:#}"), true),
-        }
-        self.sync_prefs();
-    }
-
     fn set_plasma(&mut self, v: bool) {
         let result = if v {
             crate::plasma::install(&self.settings.dirs).map(drop)
@@ -2107,12 +2128,24 @@ impl App {
         let status = if self.restart_into.is_some() {
             "A new version is installed: restart Yoink to use it."
         } else if listed {
-            "Yoink is in your apps: it is checked and updated with them."
+            "Yoink is in your apps: it is checked and updated with them, and gets a desktop entry if its deployment asks for one, like any app."
         } else {
             "To keep Yoink up to date, add it to your apps: it is then checked and updated with them."
         };
         p.set_self_status(status.into());
         ui.global::<Apps>().set_restart_ready(self.restart_into.is_some());
+    }
+
+    /// Yoink's place in the applications menu follows its own deployment's
+    /// desktop setting, like any app's: an entry it wrote for itself (an
+    /// older version's option) goes, unless that deployment wants one.
+    fn retire_menu_entry(&self) {
+        let wanted = self.library.apps.iter().filter(|a| a.is_yoink()).any(|a| {
+            a.deployments
+                .iter()
+                .any(|d| d.desktop && matches!(d.kind, Kind::AppImage | Kind::Binary))
+        });
+        crate::desktop::retire_menu_entry(&self.settings.dirs, wanted);
     }
 
     /// Opens the editor on Yoink's own repository, ready to pick its build.
@@ -2128,20 +2161,33 @@ impl App {
     }
 
     fn restart(&mut self) {
-        let exe = self
-            .restart_into
-            .clone()
-            .filter(|p| p.is_file())
-            .or_else(plan::running_exe);
-        let Some(exe) = exe else { return };
+        // The new version first, else what runs now (as it was started).
+        let mut candidates: Vec<PathBuf> = Vec::new();
+        for p in self.restart_into.iter().cloned().chain(plan::running_exe()) {
+            if p.is_file() && !candidates.contains(&p) {
+                candidates.push(p);
+            }
+        }
+        if candidates.is_empty() {
+            self.toast("Could not restart: cannot tell where Yoink is", true);
+            return;
+        }
         self.remember_window();
         self.save_settings();
-        match std::process::Command::new(&exe).spawn() {
-            Ok(_) => {
-                let _ = slint::quit_event_loop();
+        let mut errors = Vec::new();
+        for exe in candidates {
+            match spawn_exe(&exe) {
+                Ok(()) => {
+                    let _ = slint::quit_event_loop();
+                    return;
+                }
+                Err(e) => {
+                    log::warn!("could not start {}: {e}", exe.display());
+                    errors.push(format!("{}: {e}", tilde(&exe)));
+                }
             }
-            Err(e) => self.toast(&format!("Could not restart: {e}"), true),
         }
+        self.toast(&format!("Could not restart: {}", errors.join("; ")), true);
     }
 
     // -------------------------------------------------------------- window
