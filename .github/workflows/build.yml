@@ -1,6 +1,6 @@
 name: Build
 
-# Tests, then builds the AppImage and the Android APK on every push: kept
+# Tests, then builds the Linux binary and the Android APK on every push: kept
 # as workflow artifacts (Yoink's own "dev builds" channel), and attached to
 # the release for v* tags.
 
@@ -31,28 +31,11 @@ jobs:
         run: cargo test --locked
       - name: Build
         run: cargo build --release --locked
-      - name: AppImage
+      - name: Binary
         run: |
-          set -eux
-          app=AppDir
-          mkdir -p $app/usr/bin $app/usr/share/applications $app/usr/share/icons/hicolor/scalable/apps
-          cp target/release/yoink $app/usr/bin/
-          cp packaging/yoink.desktop $app/
-          cp packaging/yoink.desktop $app/usr/share/applications/
-          cp assets/yoink-icon.svg $app/yoink.svg
-          cp assets/yoink-icon.svg $app/usr/share/icons/hicolor/scalable/apps/yoink.svg
-          ln -s yoink.svg $app/.DirIcon
-          cat > $app/AppRun <<'RUN'
-          #!/bin/sh
-          HERE="$(dirname "$(readlink -f "$0")")"
-          exec "$HERE/usr/bin/yoink" "$@"
-          RUN
-          chmod +x $app/AppRun
-          curl -fsSL -o appimagetool https://github.com/AppImage/appimagetool/releases/download/continuous/appimagetool-x86_64.AppImage
-          chmod +x appimagetool
-          ARCH=x86_64 APPIMAGE_EXTRACT_AND_RUN=1 ./appimagetool --no-appstream $app Yoink-x86_64.AppImage
-          ls -l Yoink-x86_64.AppImage
-          file Yoink-x86_64.AppImage
+          cp target/release/yoink yoink-x86_64-linux
+          ls -l yoink-x86_64-linux
+          file yoink-x86_64-linux
       - name: Check the libraries it needs
         # Only libraries every Linux desktop has.
         run: |
@@ -64,14 +47,14 @@ jobs:
           fi
       - uses: actions/upload-artifact@v4
         with:
-          name: Yoink-x86_64.AppImage
-          path: Yoink-x86_64.AppImage
+          name: yoink-x86_64-linux
+          path: yoink-x86_64-linux
           if-no-files-found: error
       - name: Release
         if: startsWith(github.ref, 'refs/tags/v')
         uses: softprops/action-gh-release@v2
         with:
-          files: Yoink-x86_64.AppImage
+          files: yoink-x86_64-linux
 
   android:
     runs-on: ubuntu-latest

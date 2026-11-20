@@ -14,6 +14,7 @@ export global Prefs {
 
     in property <bool> has-token;
     in property <string> token-status;
+    in property <string> token-warning;
     callback save-token(string);
     callback clear-token();
 
@@ -186,6 +187,12 @@ export component OptionsPanel inherits Rectangle {
                             clicked => { root.interacted(); Prefs.clear-token(); }
                         }
                     }
+                    if Prefs.token-warning != "": Text {
+                        text: Prefs.token-warning;
+                        color: Theme.warn.brighter(20%);
+                        font-size: Theme.font-small;
+                        wrap: word-wrap;
+                    }
                     HorizontalLayout {
                         spacing: 8px;
                         token := TextField {
@@ -303,7 +310,7 @@ export component OptionsPanel inherits Rectangle {
                             text: Prefs.self-listed ? "Edit Yoink's entry" : "Add Yoink to your apps";
                             icon-line: Prefs.self-listed ? Icons.gear-line : MoreIcons.plus-line;
                             primary: !Prefs.self-listed;
-                            tip: Prefs.self-listed ? "Change where Yoink's updates come from" : "Opens the editor on Yoink's repository: pick the AppImage, from Releases or Actions";
+                            tip: Prefs.self-listed ? "Change where Yoink's updates come from" : "Opens the editor on Yoink's repository: pick the Linux binary, from Releases or Actions";
                             clicked => { root.interacted(); Prefs.add-self(); }
                         }
                     }
