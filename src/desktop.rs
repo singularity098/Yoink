@@ -207,9 +207,7 @@ fn own_icon_path() -> Option<PathBuf> {
 
 /// What Yoink is run as: its AppImage, or else this executable.
 fn own_exe() -> Option<PathBuf> {
-    std::env::var_os("APPIMAGE")
-        .map(PathBuf::from)
-        .or_else(|| std::env::current_exe().ok())
+    crate::plan::running_exe()
 }
 
 /// Finds `yoink.desktop` where desktops look (the user's folder first) and
@@ -304,7 +302,7 @@ pub fn remove_own_entry() -> anyhow::Result<()> {
 }
 
 /// At start: an entry Yoink wrote is pointed at where Yoink now runs from
-/// (the AppImage moved) and gets its icon back if it is gone or old, and on
+/// (it moved) and gets its icon back if it is gone or old, and on
 /// Wayland, where the compositor shows the
 /// icon of the entry matching the window's app id, a hidden one is written
 /// when there is none.

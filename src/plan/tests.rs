@@ -392,3 +392,36 @@ fn yoink_reinstalls_over_itself() {
     assert_eq!(old, "old yoink");
     assert!(!h.join("applications").exists());
 }
+
+#[test]
+fn yoink_updates_itself_as_a_binary() {
+    let env = env();
+    let lib = Library::default();
+    let ctx = PlanContext {
+        dirs: &env.dirs,
+        library: &lib,
+    };
+    let (mut app, mut dep) = app(Kind::Binary);
+    app.source = Source::parse("singularity098/yoink").unwrap();
+    dep.desktop = true;
+    let dir = env.root.join("staging/yoink");
+    let file = dir.join("download/yoink-x86_64-linux");
+    let bin = elf(false);
+    write(&file, &bin, 0o644);
+    let s = Staged {
+        contents: Contents::default(),
+        dir,
+        file,
+        ftype: FileType::Elf,
+        verified: None,
+        unpacked: None,
+    };
+    let t = ready(build(&ctx, &app, &dep, &remote("yoink-x86_64-linux", "v2"), &s).unwrap());
+    let rows = t.rows();
+    assert!(rows.iter().any(|r| r.verb == "Note" && r.text.contains("this is Yoink itself")));
+    let exe = env.dirs.path("bin").unwrap().join("yoink");
+    assert_eq!(t.new_files, vec![exe.clone()], "installed as `yoink`, no desktop entry of its own");
+    let (_, res) = apply(&t, &stops(&env));
+    res.unwrap();
+    assert_eq!(std::fs::read(&exe).unwrap(), bin);
+}

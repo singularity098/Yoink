@@ -44,7 +44,7 @@ file that will be downloaded, copied, replaced, kept and deleted. Only
   GitHub token (kept in your keyring), the theme, and Yoink's own entry.
 * **Yoink in the applications menu**: Options → Yoink → *Show Yoink in the
   applications menu* writes `~/.local/share/applications/yoink.desktop` and
-  its icon, pointed at the AppImage (and kept pointed at it if it moves);
+  its icon, pointed at the Yoink executable (and kept pointed at it if it moves);
   turning it off removes them. From a terminal: `yoink --install-desktop`
   and `yoink --remove-desktop`. An entry a package installed is left alone.
 
@@ -61,17 +61,25 @@ classic token with no scopes, for public repositories) is enough. It is
 stored in the desktop's keyring (Secret Service), or in
 `~/.config/yoink/token` (readable only by you) where there is none.
 
+Any program running as you can read the keyring once it is unlocked, so
+give Yoink a token that would be worth little to anyone else. When a token
+is saved (and at each start), Yoink warns in Options if it is a classic
+token with scopes, or a fine-grained token that can see private
+repositories. GitHub does not say what a fine-grained token may write, so
+check that yourself: Yoink only needs read access.
+
 ### Yoink updating itself
 
 As on Android, Yoink updates itself as one of your apps: add
 `singularity098/Yoink` (or Options → Yoink → *Add Yoink to your apps*) and
-pick `Yoink-x86_64.AppImage`, from Releases or Actions builds. It is then
-checked and updated with everything else, shown in the plan first, and
-installed last; **Restart Yoink** in the toolbar starts the new version.
-The new AppImage is renamed into place, so installing over the one that is
-running is safe, and installing the same version again (Force update)
-works too. No desktop entry is written for that deployment: Yoink's own
-(Options) follows whichever AppImage it runs from.
+pick `yoink-x86_64-linux` (a single executable), from Releases or Actions
+builds. It is installed as `yoink` in your bin folder (unless you name it
+otherwise), checked and updated with everything else, shown in the plan
+first, and installed last; **Restart Yoink** in the toolbar starts the new
+version. The new executable is renamed into place, so installing over the
+one that is running is safe, and installing the same version again (Force
+update) works too. No desktop entry is written for that deployment:
+Yoink's own (Options) follows wherever Yoink runs from.
 
 ## Files
 

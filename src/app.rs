@@ -104,6 +104,8 @@ pub struct App {
     token: Option<String>,
     token_store: Option<secret::Store>,
     token_note: String,
+    /// The token can do more than Yoink needs.
+    token_warning: Option<String>,
     status: HashMap<(String, String), DepState>,
     rows: Rc<VecModel<AppRow>>,
     icons: HashMap<String, (PathBuf, Image)>,
@@ -113,7 +115,7 @@ pub struct App {
     confirm: Option<String>,
     busy: Option<Arc<AtomicBool>>,
     checking: usize,
-    /// Yoink itself was updated (from the list): the AppImage a restart runs.
+    /// Yoink itself was updated (from the list): the executable a restart runs.
     restart_into: Option<PathBuf>,
     toast_serial: u64,
     settings_dirty: bool,
@@ -137,6 +139,7 @@ pub fn run() -> anyhow::Result<()> {
         token,
         token_store,
         token_note: String::new(),
+        token_warning: None,
         status: HashMap::new(),
         rows: Rc::new(VecModel::default()),
         icons: HashMap::new(),
@@ -155,6 +158,9 @@ pub fn run() -> anyhow::Result<()> {
     {
         let mut a = app.borrow_mut();
         a.init_ui();
+        if let Some(t) = a.token.clone() {
+            check_token(t);
+        }
         if a.settings.check_on_startup {
             a.check_all();
         }
@@ -216,6 +222,7 @@ fn connect(ui: &MainWindow) {
         a.token = None;
         a.token_store = None;
         a.token_note.clear();
+        a.token_warning = None;
         a.sync_prefs();
         a.toast("Token removed", false);
     });
@@ -338,6 +345,22 @@ fn channel_key(c: &Channel) -> String {
         Channel::Releases { prerelease } => format!("r:{prerelease}"),
         Channel::Actions { workflow, branch } => format!("a:{workflow}:{branch}"),
     }
+}
+
+/// Checks the token in the background, and shows what GitHub said and any
+/// warning in Options.
+fn check_token(token: String) {
+    std::thread::spawn(move || {
+        let c = secret::check(&token);
+        post(move |a| {
+            // Only if it is still the token saved.
+            if a.token.as_deref() == Some(token.as_str()) {
+                a.token_note = c.note;
+                a.token_warning = c.warning;
+                a.sync_prefs();
+            }
+        });
+    });
 }
 
 /// The first line of an error, for a status line.
@@ -950,7 +973,7 @@ impl App {
             };
             match r {
                 Ok(()) => {
-                    if is_yoink && dep.kind == Kind::AppImage {
+                    if is_yoink && matches!(dep.kind, Kind::AppImage | Kind::Binary) {
                         if let Some(exe) = t.new_files.first() {
                             self.restart_into = Some(exe.clone());
                             yoink_updated = Some(t.to.clone());
@@ -1803,6 +1826,7 @@ impl App {
             .collect();
         p.set_dirs(ModelRc::new(VecModel::from(dirs)));
         p.set_has_token(self.token.is_some());
+        p.set_token_warning(self.token_warning.clone().unwrap_or_default().into());
         p.set_token_status(
             match (&self.token, self.token_store) {
                 (Some(_), Some(s)) => {
@@ -1881,29 +1905,9 @@ impl App {
                 self.token = Some(t.clone());
                 self.token_store = Some(store);
                 self.token_note = "Checking it…".into();
+                self.token_warning = None;
                 self.sync_prefs();
-                std::thread::spawn(move || {
-                    let auth = crate::http::Auth {
-                        token: Some(t),
-                        hosts: &["api.github.com"],
-                    };
-                    let r = crate::http::get_json::<serde_json::Value>("https://api.github.com/rate_limit", &auth);
-                    let note = match r {
-                        Ok(v) => {
-                            let left = v.pointer("/resources/core/remaining").and_then(|x| x.as_u64());
-                            let limit = v.pointer("/resources/core/limit").and_then(|x| x.as_u64());
-                            match (left, limit) {
-                                (Some(l), Some(m)) if m > 60 => format!("It works: {l} of {m} requests left this hour."),
-                                _ => "GitHub did not take it as a token (still 60 requests an hour).".into(),
-                            }
-                        }
-                        Err(e) => format!("It did not work: {}", short(&e)),
-                    };
-                    post(move |a| {
-                        a.token_note = note;
-                        a.sync_prefs();
-                    });
-                });
+                check_token(t);
             }
             Err(e) => self.toast(&format!("Could not save the token: {e:#}"), true),
         }
@@ -1990,8 +1994,7 @@ impl App {
             .restart_into
             .clone()
             .filter(|p| p.is_file())
-            .or_else(plan::running_appimage)
-            .or_else(|| std::env::current_exe().ok());
+            .or_else(plan::running_exe);
         let Some(exe) = exe else { return };
         self.remember_window();
         self.save_settings();

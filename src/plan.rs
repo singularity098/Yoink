@@ -520,16 +520,25 @@ pub fn build(
         }
         Kind::Binary => {
             let bin = ctx.dirs.path("bin")?;
+            let yoink = app.is_yoink();
+            // Yoink's own binary is installed as `yoink`, whatever the
+            // release calls it, unless asked otherwise.
+            let exe_name = |file: String| {
+                if !dep.install_name.trim().is_empty() {
+                    dep.install_name.trim().to_string()
+                } else if yoink {
+                    "yoink".to_string()
+                } else {
+                    file
+                }
+            };
             if staged.ftype == FileType::Elf || (root.is_none() && staged.ftype == FileType::Other) {
                 // A bare executable.
-                let name = if dep.install_name.trim().is_empty() {
-                    file_name(&staged.file)
-                } else {
-                    dep.install_name.trim().to_string()
-                };
-                let dest = bin.join(&name);
+                let dest = bin.join(exe_name(file_name(&staged.file)));
                 install(&mut actions, &mut new_files, staged.file.clone(), dest.clone(), false, true);
-                if dep.desktop {
+                if yoink {
+                    yoink_notes(&dest, dep.desktop, &mut actions);
+                } else if dep.desktop {
                     desktop_actions(ctx, app, dep, &dest, None, None, &mut actions, &mut new_files)?;
                 }
             } else {
@@ -598,13 +607,11 @@ pub fn build(
                         }
                         Choice::None => bail!("no executable inside {}", remote.file_name),
                     };
-                    let name = if dep.install_name.trim().is_empty() {
-                        file_name(p)
-                    } else {
-                        dep.install_name.trim().to_string()
-                    };
-                    let dest = bin.join(name);
+                    let dest = bin.join(exe_name(file_name(p)));
                     install(&mut actions, &mut new_files, root.join(p), dest.clone(), false, true);
+                    if yoink {
+                        yoink_notes(&dest, dep.desktop, &mut actions);
+                    }
                     main_exe = Some(dest);
                     let others = c.executables.len() + c.shared_libs.len() - 1;
                     if others > 0 {
@@ -615,7 +622,7 @@ pub fn build(
                         )));
                     }
                 }
-                if dep.desktop {
+                if dep.desktop && !yoink {
                     if shipped_desktop {
                         actions.push(Action::Note("the package brings its own desktop entry (in share/applications)".into()));
                     } else if let Some(exe) = &main_exe {
@@ -723,9 +730,20 @@ pub fn build(
     })))
 }
 
-/// The AppImage Yoink runs from, if it runs from one.
-pub fn running_appimage() -> Option<PathBuf> {
-    std::env::var_os("APPIMAGE").map(PathBuf::from).filter(|p| p.is_absolute())
+/// What Yoink runs from: its AppImage if it runs from one, else its own
+/// executable (as it was started, even if it has since been replaced).
+pub fn running_exe() -> Option<PathBuf> {
+    std::env::var_os("APPIMAGE")
+        .map(PathBuf::from)
+        .filter(|p| p.is_absolute())
+        .or_else(|| {
+            let exe = std::env::current_exe().ok()?;
+            let s = exe.to_string_lossy();
+            Some(match s.strip_suffix(" (deleted)") {
+                Some(s) => PathBuf::from(s),
+                None => exe,
+            })
+        })
 }
 
 fn same_file(a: &Path, b: &Path) -> bool {
@@ -736,11 +754,12 @@ fn same_file(a: &Path, b: &Path) -> bool {
         }
 }
 
-/// Yoink updating itself: the AppImage it runs from is its own to replace
-/// (the new one is renamed into place, so the running copy is untouched
-/// until it restarts), and its menu entry is the one Options manages.
+/// Yoink updating itself: the executable it runs from is its own to
+/// replace (the new one is renamed into place, so the running copy is
+/// untouched until it restarts), and its menu entry is the one Options
+/// manages.
 fn yoink_notes(dest: &Path, desktop: bool, actions: &mut Vec<Action>) {
-    let running = running_appimage();
+    let running = running_exe();
     let replaces_running = running.as_deref().is_some_and(|r| same_file(r, dest));
     if replaces_running {
         for a in actions.iter_mut() {
@@ -762,7 +781,7 @@ fn yoink_notes(dest: &Path, desktop: bool, actions: &mut Vec<Action>) {
     }
     if desktop {
         actions.push(Action::Note(
-            "no desktop entry is written for it: Yoink's own is set in Options, and follows the AppImage it runs from"
+            "no desktop entry is written for it: Yoink's own is set in Options, and follows wherever Yoink runs from"
                 .into(),
         ));
     }

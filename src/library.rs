@@ -243,7 +243,7 @@ impl App {
     }
 
     /// Whether this is Yoink itself (its own repository): updating it
-    /// replaces the running AppImage, and a restart runs the new version.
+    /// replaces the running executable, and a restart runs the new version.
     pub fn is_yoink(&self) -> bool {
         match &self.source {
             Source::Github { owner, repo } => {
