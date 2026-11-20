@@ -41,6 +41,12 @@ export global Prefs {
     callback check-self();
     callback update-self();
     in property <string> config-path;
+    // Yoink's own desktop entry: in the applications menu, and whether a
+    // package put it there (then it is not Yoink's to remove).
+    in property <bool> in-menu;
+    in property <bool> menu-locked;
+    in property <string> menu-status;
+    callback set-in-menu(bool);
 }
 
 component Card inherits Rectangle {
@@ -335,6 +341,15 @@ export component OptionsPanel inherits Rectangle {
                             enabled: Prefs.self-can-update;
                             tip: Prefs.self-can-update ? "Shows what will be replaced first" : "Only the AppImage can update itself";
                             clicked => { root.interacted(); Prefs.update-self(); }
+                        }
+                    }
+                    SettingRow {
+                        label: "Show Yoink in the applications menu";
+                        detail: Prefs.menu-status;
+                        Toggle {
+                            checked: Prefs.in-menu;
+                            enabled: !Prefs.menu-locked;
+                            toggled(v) => { root.interacted(); Prefs.set-in-menu(v); }
                         }
                     }
                     Text {

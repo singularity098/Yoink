@@ -42,6 +42,11 @@ file that will be downloaded, copied, replaced, kept and deleted. Only
   just stop managing it.
 * **Options** (the gear, or `,`) slide out from the right: the folders, the
   GitHub token (kept in your keyring), the theme, and Yoink's own updates.
+* **Yoink in the applications menu**: Options → Yoink → *Show Yoink in the
+  applications menu* writes `~/.local/share/applications/yoink.desktop` and
+  its icon, pointed at the AppImage (and kept pointed at it if it moves);
+  turning it off removes them. From a terminal: `yoink --install-desktop`
+  and `yoink --remove-desktop`. An entry a package installed is left alone.
 
 Yoink records every file each deployment puts in place, so updates and
 removals delete exactly those, and a file that Yoink did not put there (or

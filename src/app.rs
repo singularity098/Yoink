@@ -240,6 +240,7 @@ fn connect(ui: &MainWindow) {
     on!(p, on_check_self, |a| a.check_self());
     on!(p, on_update_self, |a| a.update_self());
     on!(p, on_restart, |a| a.restart());
+    on!(p, on_set_in_menu, |a, v: bool| a.set_in_menu(v));
 
     let e = ui.global::<Editor>();
     on!(e, on_fetch, |a| a.editor_fetch());
@@ -1851,6 +1852,14 @@ impl App {
         p.set_self_channel(if self.settings.self_channel == "actions" { 1 } else { 0 });
         p.set_self_checking(self.self_checking);
         p.set_self_updated(self.self_updated);
+        let (in_menu, menu_status, menu_locked) = match crate::desktop::own_entry() {
+            crate::desktop::OwnEntry::Shown(path) => (true, format!("In the menu: {}", tilde(&path)), false),
+            crate::desktop::OwnEntry::System(path) => (true, format!("Installed by a package: {}", tilde(&path)), true),
+            _ => (false, "Adds a desktop entry and icon to your home folder.".to_string(), false),
+        };
+        p.set_in_menu(in_menu);
+        p.set_menu_status(menu_status.into());
+        p.set_menu_locked(menu_locked);
         p.set_config_path(tilde(&config::config_dir().join("settings.toml")).into());
     }
 
@@ -1950,6 +1959,20 @@ impl App {
             _ => return,
         }
         self.save_settings();
+        self.sync_prefs();
+    }
+
+    fn set_in_menu(&mut self, v: bool) {
+        let result = if v {
+            crate::desktop::install_own_entry().map(drop)
+        } else {
+            crate::desktop::remove_own_entry()
+        };
+        match result {
+            Ok(()) if v => self.toast("Yoink is in the applications menu", false),
+            Ok(()) => self.toast("Yoink is out of the applications menu", false),
+            Err(e) => self.toast(&format!("Could not change the desktop entry: {e:#}"), true),
+        }
         self.sync_prefs();
     }
 
