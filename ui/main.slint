@@ -153,6 +153,13 @@ component Toolbar inherits HorizontalLayout {
         tip: "Download everything new; you see the full list before anything is installed";
         clicked => { Apps.update-all(); }
     }
+    if Apps.restart-ready: BigButton {
+        text: "Restart Yoink";
+        icon-line: Icons.refresh-line;
+        primary: true;
+        tip: "Yoink was updated: start the new version";
+        clicked => { Apps.restart(); }
+    }
     Rectangle { horizontal-stretch: 1; }
     if Apps.busy: HorizontalLayout {
         spacing: 8px;

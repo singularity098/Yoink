@@ -80,8 +80,6 @@ pub struct Task {
     pub new_files: Vec<PathBuf>,
     /// The icon found in the package, for the app's own icon.
     pub icon: Option<(Vec<u8>, &'static str, IconSource)>,
-    /// Updates Yoink itself (no deployment to record).
-    pub self_update: bool,
     /// Removes the app (or a deployment) rather than installing.
     pub removal: bool,
     pub staging: Option<PathBuf>,
@@ -503,6 +501,10 @@ pub fn build(
             };
             let dest = target_dir.join(file_name(&src));
             install(&mut actions, &mut new_files, src.clone(), dest.clone(), false, is_appimage);
+            let yoink = is_appimage && app.is_yoink();
+            if yoink {
+                yoink_notes(&dest, dep.desktop, &mut actions);
+            }
             if is_appimage {
                 let info = crate::appimage::read(&src).unwrap_or_else(|e| {
                     log::info!("could not look inside {}: {e:#}", src.display());
@@ -511,7 +513,7 @@ pub fn build(
                 if let Some((bytes, ext)) = &info.icon {
                     icon = Some((bytes.clone(), ext, IconSource::AppImage));
                 }
-                if dep.desktop {
+                if dep.desktop && !yoink {
                     desktop_actions(ctx, app, dep, &dest, info.desktop, icon.as_ref(), &mut actions, &mut new_files)?;
                 }
             }
@@ -716,10 +718,54 @@ pub fn build(
         actions,
         new_files,
         icon,
-        self_update: false,
         removal: false,
         staging: Some(staged.dir.clone()),
     })))
+}
+
+/// The AppImage Yoink runs from, if it runs from one.
+pub fn running_appimage() -> Option<PathBuf> {
+    std::env::var_os("APPIMAGE").map(PathBuf::from).filter(|p| p.is_absolute())
+}
+
+fn same_file(a: &Path, b: &Path) -> bool {
+    a == b
+        || match (a.canonicalize(), b.canonicalize()) {
+            (Ok(a), Ok(b)) => a == b,
+            _ => false,
+        }
+}
+
+/// Yoink updating itself: the AppImage it runs from is its own to replace
+/// (the new one is renamed into place, so the running copy is untouched
+/// until it restarts), and its menu entry is the one Options manages.
+fn yoink_notes(dest: &Path, desktop: bool, actions: &mut Vec<Action>) {
+    let running = running_appimage();
+    let replaces_running = running.as_deref().is_some_and(|r| same_file(r, dest));
+    if replaces_running {
+        for a in actions.iter_mut() {
+            if let Action::Install { dest: d, existing, .. } = a {
+                if d == dest && *existing == Existing::Foreign {
+                    *existing = Existing::Ours;
+                }
+            }
+        }
+    }
+    actions.push(Action::Note(
+        "this is Yoink itself: restart it afterwards to use the new version".into(),
+    ));
+    if let (Some(r), false) = (&running, replaces_running) {
+        actions.push(Action::Note(format!(
+            "Yoink now runs from {}; restarting runs the one installed here (the other is left alone)",
+            tilde(r)
+        )));
+    }
+    if desktop {
+        actions.push(Action::Note(
+            "no desktop entry is written for it: Yoink's own is set in Options, and follows the AppImage it runs from"
+                .into(),
+        ));
+    }
 }
 
 fn keep_package(
@@ -860,59 +906,9 @@ pub fn removal(app: &App, dep: Option<&str>) -> Task {
         actions,
         new_files: Vec::new(),
         icon: None,
-        self_update: false,
         removal: true,
         staging: None,
     }
-}
-
-/// The plan for Yoink replacing its own AppImage.
-pub fn self_update(remote: &Remote, staged: &Staged, current: &str) -> anyhow::Result<Task> {
-    let target = std::env::var_os("APPIMAGE")
-        .map(PathBuf::from)
-        .ok_or_else(|| anyhow!("Yoink can only update itself when run as an AppImage"))?;
-    let src = if staged.ftype == FileType::AppImage {
-        staged.file.clone()
-    } else {
-        let root = staged.unpacked.as_deref().ok_or_else(|| anyhow!("no AppImage in {}", remote.file_name))?;
-        let p = staged
-            .contents
-            .appimages
-            .first()
-            .ok_or_else(|| anyhow!("no AppImage in {}", remote.file_name))?;
-        root.join(p)
-    };
-    let mut actions = vec![Action::Downloaded {
-        name: remote.file_name.clone(),
-        size: remote.size,
-        verified: staged.verified,
-    }];
-    if !remote.note.is_empty() {
-        actions.push(Action::Note(remote.note.clone()));
-    }
-    actions.push(Action::Install {
-        src,
-        dest: target.clone(),
-        dir: false,
-        exec: true,
-        existing: Existing::Ours,
-    });
-    actions.push(Action::Note("restart Yoink afterwards to use the new version".into()));
-    Ok(Task {
-        app_id: String::new(),
-        dep_id: String::new(),
-        app_name: "Yoink".into(),
-        label: "itself".into(),
-        from: Some(current.to_string()),
-        to: remote.version.clone(),
-        remote: Some(remote.clone()),
-        actions,
-        new_files: vec![target],
-        icon: None,
-        self_update: true,
-        removal: false,
-        staging: Some(staged.dir.clone()),
-    })
 }
 
 // ------------------------------------------------------------- applying

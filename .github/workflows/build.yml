@@ -86,9 +86,10 @@ jobs:
           java-version: 21
       - uses: gradle/actions/setup-gradle@v4
       - name: Signing key
-        # With the secrets set, every build is signed with the same key, so
-        # each one installs as an update of the last. Without them, the
-        # runner's throwaway debug key signs it (installable, not updatable).
+        # With the secrets set, builds are signed with that private key.
+        # Without them, with the dev keystore in the repository: either way
+        # every build is signed with the same key, so each one installs as
+        # an update of the last.
         env:
           KEYSTORE_BASE64: ${{ secrets.ANDROID_KEYSTORE_BASE64 }}
         run: |
@@ -96,7 +97,7 @@ jobs:
             echo "$KEYSTORE_BASE64" | base64 -d > "$RUNNER_TEMP/yoink.jks"
             echo "YOINK_KEYSTORE=$RUNNER_TEMP/yoink.jks" >> "$GITHUB_ENV"
           else
-            echo "::warning::No ANDROID_KEYSTORE_BASE64 secret: the APK is signed with a throwaway debug key"
+            echo "::notice::No ANDROID_KEYSTORE_BASE64 secret: the APK is signed with the dev keystore in the repository"
           fi
       - name: Test and build
         env:

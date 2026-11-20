@@ -27,11 +27,6 @@ use crate::{
     Picker, PlanRow, PlanView, Prefs, Theme,
 };
 
-/// Where Yoink's own builds come from.
-const SELF_OWNER: &str = "singularity098";
-const SELF_REPO: &str = "Yoink";
-const SELF_PATTERN: &str = "Yoink*.AppImage";
-
 thread_local! {
     static APP: RefCell<Option<Rc<RefCell<App>>>> = const { RefCell::new(None) };
     static CURSOR: std::cell::Cell<(f32, f32)> = const { std::cell::Cell::new((0.0, 0.0)) };
@@ -118,10 +113,8 @@ pub struct App {
     confirm: Option<String>,
     busy: Option<Arc<AtomicBool>>,
     checking: usize,
-    self_remote: Option<Remote>,
-    self_status: String,
-    self_checking: bool,
-    self_updated: bool,
+    /// Yoink itself was updated (from the list): the AppImage a restart runs.
+    restart_into: Option<PathBuf>,
     toast_serial: u64,
     settings_dirty: bool,
 }
@@ -153,10 +146,7 @@ pub fn run() -> anyhow::Result<()> {
         confirm: None,
         busy: None,
         checking: 0,
-        self_remote: None,
-        self_status: String::new(),
-        self_checking: false,
-        self_updated: false,
+        restart_into: None,
         toast_serial: 0,
         settings_dirty: false,
     }));
@@ -167,7 +157,6 @@ pub fn run() -> anyhow::Result<()> {
         a.init_ui();
         if a.settings.check_on_startup {
             a.check_all();
-            a.check_self();
         }
     }
     ui.show()?;
@@ -211,6 +200,7 @@ fn connect(ui: &MainWindow) {
             open_url(&app.source.web_url());
         }
     });
+    on!(apps, on_restart, |a| a.restart());
     on!(apps, on_cancel_busy, |a| {
         if let Some(c) = &a.busy {
             c.store(true, Ordering::Relaxed);
@@ -231,15 +221,7 @@ fn connect(ui: &MainWindow) {
     });
     on!(p, on_set_theme, |a, i: i32| a.set_theme(i));
     on!(p, on_set_flag, |a, id: SharedString, v: bool| a.set_flag(&id, v));
-    on!(p, on_set_self_channel, |a, i: i32| {
-        a.settings.self_channel = if i == 1 { "actions" } else { "releases" }.into();
-        a.save_settings();
-        a.self_remote = None;
-        a.check_self();
-    });
-    on!(p, on_check_self, |a| a.check_self());
-    on!(p, on_update_self, |a| a.update_self());
-    on!(p, on_restart, |a| a.restart());
+    on!(p, on_add_self, |a| a.add_self());
     on!(p, on_set_in_menu, |a, v: bool| a.set_in_menu(v));
 
     let e = ui.global::<Editor>();
@@ -476,6 +458,7 @@ impl App {
         let rows: Vec<AppRow> = (0..self.library.apps.len()).map(|i| self.app_row(i)).collect();
         self.rows.set_vec(rows);
         self.refresh_summary();
+        self.sync_self();
     }
 
     fn refresh_app(&mut self, id: &str) {
@@ -904,7 +887,9 @@ impl App {
         if self.busy.is_some() {
             return;
         }
-        let tasks = pending.tasks.clone();
+        let mut tasks = pending.tasks.clone();
+        // Yoink itself last, once everything else is in place.
+        tasks.sort_by_key(|t| self.library.app(&t.app_id).is_some_and(|a| a.is_yoink()));
         let cancel = Arc::new(AtomicBool::new(false));
         self.busy = Some(cancel);
         self.ui().global::<PlanView>().set_applying(true);
@@ -912,10 +897,8 @@ impl App {
         self.refresh_summary();
         let stops = self.stop_dirs();
         for t in &tasks {
-            if !t.self_update {
-                let st = self.status.entry((t.app_id.clone(), t.dep_id.clone())).or_default();
-                st.working = Some(if t.removal { "removing…" } else { "installing…" }.into());
-            }
+            let st = self.status.entry((t.app_id.clone(), t.dep_id.clone())).or_default();
+            st.working = Some(if t.removal { "removing…" } else { "installing…" }.into());
         }
         self.refresh_rows();
         std::thread::spawn(move || {
@@ -939,18 +922,8 @@ impl App {
         ui.global::<PlanView>().set_applying(false);
         let mut ok = 0;
         let mut errors = Vec::new();
+        let mut yoink_updated = None;
         for (t, placed, r) in results {
-            if t.self_update {
-                match r {
-                    Ok(()) => {
-                        self.self_updated = true;
-                        self.self_status = format!("Updated to {}: restart Yoink to use it", t.to);
-                        ok += 1;
-                    }
-                    Err(e) => errors.push(format!("Yoink: {e}")),
-                }
-                continue;
-            }
             let key = (t.app_id.clone(), t.dep_id.clone());
             if let Some(st) = self.status.get_mut(&key) {
                 st.working = None;
@@ -971,11 +944,18 @@ impl App {
                 }
                 continue;
             }
+            let is_yoink = app.is_yoink();
             let Some(dep) = app.deployments.iter_mut().find(|d| d.id == t.dep_id) else {
                 continue;
             };
             match r {
                 Ok(()) => {
+                    if is_yoink && dep.kind == Kind::AppImage {
+                        if let Some(exe) = t.new_files.first() {
+                            self.restart_into = Some(exe.clone());
+                            yoink_updated = Some(t.to.clone());
+                        }
+                    }
                     let remote = t.remote.clone();
                     dep.installed = Some(Installed {
                         key: remote.as_ref().map(|r| r.key.clone()).unwrap_or_default(),
@@ -1035,6 +1015,8 @@ impl App {
         self.sync_prefs();
         if let Some(name) = removed {
             self.toast(&format!("Removed {name} and its files"), false);
+        } else if let (Some(v), true) = (&yoink_updated, errors.is_empty()) {
+            self.toast(&format!("Yoink {v} is installed: restart Yoink to use it"), false);
         } else if errors.is_empty() {
             self.toast(&format!("Done: {ok} item{}", if ok == 1 { "" } else { "s" }), false);
         } else {
@@ -1846,12 +1828,7 @@ impl App {
         p.set_hover_opens(self.settings.hover_opens);
         p.set_native_wayland(self.settings.native_wayland);
         p.set_version(version_label().into());
-        p.set_self_status(self.self_status.clone().into());
-        p.set_self_update_available(self.self_update_available());
-        p.set_self_can_update(std::env::var_os("APPIMAGE").is_some());
-        p.set_self_channel(if self.settings.self_channel == "actions" { 1 } else { 0 });
-        p.set_self_checking(self.self_checking);
-        p.set_self_updated(self.self_updated);
+        self.sync_self();
         let (in_menu, menu_status, menu_locked) = match crate::desktop::own_entry() {
             crate::desktop::OwnEntry::Shown(path) => (true, format!("In the menu: {}", tilde(&path)), false),
             crate::desktop::OwnEntry::System(path) => (true, format!("Installed by a package: {}", tilde(&path)), true),
@@ -1978,115 +1955,42 @@ impl App {
 
     // --------------------------------------------------------- self update
 
-    fn self_channel(&self) -> Channel {
-        if self.settings.self_channel == "actions" {
-            Channel::Actions {
-                workflow: String::new(),
-                branch: String::new(),
-            }
+    /// Yoink keeps itself up to date as an app in the list, like any other
+    /// (as on Android): Options says whether it is there, and offers to add it.
+    fn sync_self(&self) {
+        let ui = self.ui();
+        let p = ui.global::<Prefs>();
+        let listed = self.library.apps.iter().any(|a| a.is_yoink());
+        p.set_self_listed(listed);
+        let status = if self.restart_into.is_some() {
+            "A new version is installed: restart Yoink to use it."
+        } else if listed {
+            "Yoink is in your apps: it is checked and updated with them."
         } else {
-            Channel::Releases { prerelease: false }
-        }
-    }
-
-    fn self_update_available(&self) -> bool {
-        let Some(r) = &self.self_remote else { return false };
-        if r.key.starts_with("actions:") {
-            let built = env!("YOINK_COMMIT");
-            let sha = r.key.rsplit(':').next().unwrap_or("");
-            built.is_empty() || sha != built
-        } else {
-            r.version.trim_start_matches(['v', 'V']) != crate::VERSION
-        }
-    }
-
-    fn check_self(&mut self) {
-        if self.self_checking {
-            return;
-        }
-        self.self_checking = true;
-        self.self_status = "Checking…".into();
-        self.sync_prefs();
-        let channel = self.self_channel();
-        let token = self.token.clone();
-        std::thread::spawn(move || {
-            let source = Source::Github {
-                owner: SELF_OWNER.into(),
-                repo: SELF_REPO.into(),
-            };
-            let r = forge::forge(&source, token).resolve(&channel, SELF_PATTERN, false);
-            post(move |a| {
-                a.self_checking = false;
-                match r {
-                    Ok(remote) => {
-                        a.self_remote = Some(remote);
-                        let avail = a.self_update_available();
-                        let v = a.self_remote.as_ref().map(|r| r.version.clone()).unwrap_or_default();
-                        a.self_status = if a.self_updated {
-                            a.self_status.clone()
-                        } else if avail {
-                            format!("{v} is available")
-                        } else {
-                            "Up to date".into()
-                        };
-                    }
-                    Err(e) => {
-                        a.self_remote = None;
-                        a.self_status = format!("Could not check: {}", short(&e));
-                    }
-                }
-                a.sync_prefs();
-            });
-        });
-    }
-
-    fn update_self(&mut self) {
-        let Some(remote) = self.self_remote.clone() else {
-            self.check_self();
-            return;
+            "To keep Yoink up to date, add it to your apps: it is then checked and updated with them."
         };
-        if self.busy.is_some() {
-            self.toast("Already working on something: wait for it to finish", false);
+        p.set_self_status(status.into());
+        ui.global::<Apps>().set_restart_ready(self.restart_into.is_some());
+    }
+
+    /// Opens the editor on Yoink's own repository, ready to pick its build.
+    fn add_self(&mut self) {
+        if let Some(i) = self.library.apps.iter().position(|a| a.is_yoink()) {
+            self.open_editor(Some(i));
             return;
         }
-        let cancel = Arc::new(AtomicBool::new(false));
-        self.busy = Some(cancel.clone());
-        self.set_busy_text("Yoink: downloading…");
-        self.refresh_summary();
-        let token = self.token.clone();
-        std::thread::spawn(move || {
-            let source = Source::Github {
-                owner: SELF_OWNER.into(),
-                repo: SELF_REPO.into(),
-            };
-            let f = forge::forge(&source, token);
-            let mut last = Instant::now();
-            let r = plan::stage(f.as_ref(), &remote, &cancel, &mut |done, total| {
-                if last.elapsed() < Duration::from_millis(150) {
-                    return;
-                }
-                last = Instant::now();
-                let pct = total.map(|t| done * 100 / t.max(1)).unwrap_or(0);
-                post(move |a| a.set_busy_text(&format!("Yoink: downloading {pct}%")));
-            })
-            .and_then(|staged| plan::self_update(&remote, &staged, &version_label()));
-            post(move |a| {
-                a.busy = None;
-                a.refresh_summary();
-                match r {
-                    Ok(task) => a.show_plan(Pending {
-                        tasks: vec![task],
-                        remove_app: None,
-                    }),
-                    Err(e) => a.toast(&format!("Could not update Yoink: {e:#}"), true),
-                }
-            });
-        });
+        self.open_editor(None);
+        let repo = format!("{}/{}", crate::library::YOINK_OWNER, crate::library::YOINK_REPO);
+        self.ui().global::<Editor>().set_repo(repo.into());
+        self.editor_fetch();
     }
 
     fn restart(&mut self) {
-        let exe = std::env::var_os("APPIMAGE")
-            .map(PathBuf::from)
+        let exe = self
+            .restart_into
+            .clone()
+            .filter(|p| p.is_file())
+            .or_else(plan::running_appimage)
             .or_else(|| std::env::current_exe().ok());
         let Some(exe) = exe else { return };
         self.remember_window();
