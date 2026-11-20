@@ -2,7 +2,7 @@
 //! where it was delivered, and writing one for an app that has none. Also
 //! Yoink's own place on the desktop: its window system and desktop entry.
 
-use std::path::Path;
+use std::path::{Path, PathBuf};
 
 /// The app id Yoink's window gives the window manager.
 pub const APP_ID: &str = "yoink";
@@ -158,9 +158,8 @@ pub fn select_backend(native_wayland: bool) {
         >::with_user_event();
         b.with_x11();
         selector = selector.with_winit_event_loop_builder(b);
-    } else if on_wayland {
-        install_own_entry();
     }
+    refresh_own_entry(on_wayland && (!has_x11 || native_wayland));
     if let Err(e) = selector.select() {
         log::warn!("could not set up the window system as asked: {e}");
     }
@@ -174,39 +173,146 @@ fn window_attributes(
     x11::WindowAttributesExtX11::with_name(a, APP_ID, "Yoink")
 }
 
-/// On Wayland the compositor shows the icon of the desktop entry matching
-/// the window's app id: without an installed `yoink.desktop` (an AppImage,
-/// `cargo run`), one is written.
-fn install_own_entry() {
-    use std::path::PathBuf;
-    let data_home = std::env::var_os("XDG_DATA_HOME")
+/// Where Yoink's own desktop entry stands.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum OwnEntry {
+    /// No `yoink.desktop` anywhere.
+    Missing,
+    /// One Yoink wrote, shown in the applications menu.
+    Shown(PathBuf),
+    /// One Yoink wrote only so the compositor finds its icon (`NoDisplay`).
+    Hidden(PathBuf),
+    /// One a package installed: not Yoink's to change.
+    System(PathBuf),
+}
+
+/// Marks the entries Yoink writes for itself.
+const SELF_MARK: &str = "X-Yoink-Self";
+
+fn data_home() -> Option<PathBuf> {
+    std::env::var_os("XDG_DATA_HOME")
         .map(PathBuf::from)
-        .or_else(|| std::env::var_os("HOME").map(|h| PathBuf::from(h).join(".local/share")));
-    let Some(data_home) = data_home else { return };
+        .filter(|p| p.is_absolute())
+        .or_else(|| std::env::var_os("HOME").map(|h| PathBuf::from(h).join(".local/share")))
+}
+
+/// The entry Yoink writes, in the user's applications folder.
+fn own_entry_path() -> Option<PathBuf> {
+    data_home().map(|d| d.join("applications/yoink.desktop"))
+}
+
+fn own_icon_path() -> Option<PathBuf> {
+    data_home().map(|d| d.join("icons/hicolor/scalable/apps/yoink.svg"))
+}
+
+/// What Yoink is run as: its AppImage, or else this executable.
+fn own_exe() -> Option<PathBuf> {
+    std::env::var_os("APPIMAGE")
+        .map(PathBuf::from)
+        .or_else(|| std::env::current_exe().ok())
+}
+
+/// Finds `yoink.desktop` where desktops look (the user's folder first) and
+/// says whose it is.
+pub fn own_entry() -> OwnEntry {
     let data_dirs =
         std::env::var("XDG_DATA_DIRS").unwrap_or_else(|_| "/usr/local/share:/usr/share".into());
-    let installed = std::iter::once(data_home.clone())
+    let found = data_home()
+        .into_iter()
         .chain(data_dirs.split(':').filter(|d| !d.is_empty()).map(PathBuf::from))
-        .any(|d| d.join("applications/yoink.desktop").is_file());
-    if installed {
-        return;
+        .map(|d| d.join("applications/yoink.desktop"))
+        .find(|p| p.is_file());
+    let Some(path) = found else { return OwnEntry::Missing };
+    let text = std::fs::read_to_string(&path).unwrap_or_default();
+    if field(&text, SELF_MARK).is_none() {
+        OwnEntry::System(path)
+    } else if field(&text, "NoDisplay").as_deref() == Some("true") {
+        OwnEntry::Hidden(path)
+    } else {
+        OwnEntry::Shown(path)
     }
-    let exe = std::env::var_os("APPIMAGE")
-        .map(PathBuf::from)
-        .or_else(|| std::env::current_exe().ok());
-    let Some(exe) = exe else { return };
-    let icon_dir = data_home.join("icons/hicolor/scalable/apps");
-    let apps = data_home.join("applications");
-    let entry = include_str!("../packaging/yoink.desktop")
-        .replace("Exec=yoink", &format!("Exec={}", quote(&exe)));
-    let result = (|| -> std::io::Result<()> {
-        std::fs::create_dir_all(&icon_dir)?;
-        std::fs::write(icon_dir.join("yoink.svg"), include_bytes!("../assets/yoink-icon.svg"))?;
-        std::fs::create_dir_all(&apps)?;
-        std::fs::write(apps.join("yoink.desktop"), entry)
-    })();
+}
+
+/// Yoink's entry pointed at `exe`, hidden from the menu if asked.
+fn own_entry_text(exe: &Path, hidden: bool) -> String {
+    let mut s = String::new();
+    for line in include_str!("../packaging/yoink.desktop").lines() {
+        if line.starts_with("Exec=") {
+            s += &format!("Exec={}\nTryExec={}\n", quote(exe), exe.display());
+        } else {
+            s += line;
+            s.push('\n');
+        }
+    }
+    if hidden {
+        s += "NoDisplay=true\n";
+    }
+    s += &format!("{SELF_MARK}=true\n");
+    s
+}
+
+fn write_own_entry(hidden: bool) -> anyhow::Result<PathBuf> {
+    use anyhow::Context;
+    let exe = own_exe().context("cannot tell where Yoink is")?;
+    let entry = own_entry_path().context("no home folder")?;
+    let icon = own_icon_path().context("no home folder")?;
+    if let Some(dir) = icon.parent() {
+        std::fs::create_dir_all(dir)?;
+    }
+    crate::config::write_atomic(&icon, include_bytes!("../assets/yoink-icon.svg"))?;
+    if let Some(dir) = entry.parent() {
+        std::fs::create_dir_all(dir)?;
+    }
+    crate::config::write_atomic(&entry, own_entry_text(&exe, hidden).as_bytes())?;
+    Ok(entry)
+}
+
+/// Puts Yoink in the applications menu (with its icon), pointed at where it
+/// runs from.
+pub fn install_own_entry() -> anyhow::Result<PathBuf> {
+    if let OwnEntry::System(path) = own_entry() {
+        anyhow::bail!("{} is already installed by a package", path.display());
+    }
+    write_own_entry(false)
+}
+
+/// Takes Yoink out of the applications menu: deletes the entry and icon it
+/// wrote (never a package's).
+pub fn remove_own_entry() -> anyhow::Result<()> {
+    match own_entry() {
+        OwnEntry::System(path) => {
+            anyhow::bail!("{} was installed by a package, not by Yoink", path.display())
+        }
+        OwnEntry::Missing => Ok(()),
+        OwnEntry::Shown(path) | OwnEntry::Hidden(path) => {
+            std::fs::remove_file(&path)?;
+            if let Some(icon) = own_icon_path() {
+                let _ = std::fs::remove_file(icon);
+            }
+            Ok(())
+        }
+    }
+}
+
+/// At start: an entry Yoink wrote is pointed at where Yoink now runs from
+/// (the AppImage moved), and on Wayland, where the compositor shows the
+/// icon of the entry matching the window's app id, a hidden one is written
+/// when there is none.
+fn refresh_own_entry(on_wayland: bool) {
+    let result = match own_entry() {
+        OwnEntry::Shown(path) | OwnEntry::Hidden(path) => {
+            let text = std::fs::read_to_string(&path).unwrap_or_default();
+            let hidden = field(&text, "NoDisplay").as_deref() == Some("true");
+            match own_exe() {
+                Some(exe) if text != own_entry_text(&exe, hidden) => write_own_entry(hidden).map(drop),
+                _ => Ok(()),
+            }
+        }
+        OwnEntry::Missing if on_wayland => write_own_entry(true).map(drop),
+        _ => Ok(()),
+    };
     if let Err(e) = result {
-        log::warn!("could not install a desktop entry: {e}");
+        log::warn!("could not update Yoink's desktop entry: {e:#}");
     }
 }
 
@@ -243,5 +349,16 @@ mod tests {
         let out = generate("My Tool", "Does things", Path::new("/b/tool"), None, "x");
         assert!(out.starts_with("[Desktop Entry]\nType=Application\nName=My Tool\n"));
         assert!(out.contains("Exec=/b/tool %U\n"));
+    }
+
+    #[test]
+    fn own_entry_is_marked() {
+        let shown = own_entry_text(Path::new("/a b/Yoink.AppImage"), false);
+        assert!(shown.contains("Exec=\"/a b/Yoink.AppImage\"\n"), "{shown}");
+        assert!(shown.contains("TryExec=/a b/Yoink.AppImage\n"));
+        assert_eq!(field(&shown, SELF_MARK).as_deref(), Some("true"));
+        assert_eq!(field(&shown, "NoDisplay"), None);
+        let hidden = own_entry_text(Path::new("/y"), true);
+        assert_eq!(field(&hidden, "NoDisplay").as_deref(), Some("true"));
     }
 }
