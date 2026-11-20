@@ -1,5 +1,7 @@
 package io.github.singularity098.yoink.ui
 
+import androidx.activity.compose.rememberLauncherForActivityResult
+import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
@@ -49,6 +51,9 @@ fun OptionsScreen(model: YoinkModel, padding: PaddingValues, onBack: () -> Unit)
     val look = LocalLook.current
     val context = LocalContext.current
     var token by remember { mutableStateOf("") }
+    val pickFolder = rememberLauncherForActivityResult(ActivityResultContracts.OpenDocumentTree()) { tree ->
+        if (tree != null) model.setApkFolder(tree)
+    }
 
     Column(Modifier.fillMaxSize().padding(padding).imePadding()) {
         Row(Modifier.fillMaxWidth().padding(6.dp), verticalAlignment = Alignment.CenterVertically) {
@@ -117,6 +122,30 @@ fun OptionsScreen(model: YoinkModel, padding: PaddingValues, onBack: () -> Unit)
                     }
                     Spacer(Modifier.width(10.dp))
                     BigButton(if (model.canInstall) "Settings" else "Allow", primary = !model.canInstall, onClick = { openInstallPermission(context) })
+                }
+            }
+
+            SectionTitle("Saving APKs")
+            Panel {
+                Text("APK folder", style = MaterialTheme.typography.bodyMedium)
+                val folder = model.apkFolderName
+                Dim(
+                    when {
+                        folder == null -> "Off. Pick a folder to keep a copy of each APK Yoink installs there " +
+                            "(to share, sync or back up), each app's new APK replacing its previous one."
+                        model.apkFolderLost -> "Yoink lost access to the folder (its storage removed, or access revoked): pick it again."
+                        else -> "Each APK Yoink installs is also saved to $folder, replacing that app's previous APK."
+                    },
+                    color = if (model.apkFolderLost) Palette.warn else null,
+                )
+                Spacer(Modifier.height(10.dp))
+                Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+                    BigButton(
+                        if (folder == null) "Pick a folder" else "Change",
+                        primary = folder == null || model.apkFolderLost,
+                        onClick = { runCatching { pickFolder.launch(null) } },
+                    )
+                    if (folder != null) BigButton("Stop saving", onClick = { model.setApkFolder(null) })
                 }
             }
 

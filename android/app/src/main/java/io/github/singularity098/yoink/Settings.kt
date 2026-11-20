@@ -17,6 +17,7 @@ import javax.crypto.spec.GCMParameterSpec
  */
 class Settings(context: Context) {
     private val prefs = context.getSharedPreferences("settings", Context.MODE_PRIVATE)
+    private val saved = context.getSharedPreferences("saved_apks", Context.MODE_PRIVATE)
 
     var theme: Int
         get() = prefs.getInt("theme", 2)
@@ -26,6 +27,17 @@ class Settings(context: Context) {
     var allowFailed: Boolean
         get() = prefs.getBoolean("allow_failed", false)
         set(v) = prefs.edit().putBoolean("allow_failed", v).apply()
+
+    /** The folder (a document tree URI) installed APKs are copied to; null: none. */
+    var apkFolder: String?
+        get() = prefs.getString("apk_folder", null)
+        set(v) = prefs.edit().apply { if (v == null) remove("apk_folder") else putString("apk_folder", v) }.apply()
+
+    /** The name of the APK last saved to the folder for app [id], to replace it with the next. */
+    fun savedApk(id: String): String? = saved.getString(id, null)
+
+    fun setSavedApk(id: String, name: String?) =
+        saved.edit().apply { if (name == null) remove(id) else putString(id, name) }.apply()
 
     var token: String?
         get() = prefs.getString("token", null)?.let { runCatching { decrypt(it) }.getOrNull() }
