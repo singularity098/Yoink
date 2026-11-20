@@ -41,7 +41,7 @@ file that will be downloaded, copied, replaced, kept and deleted. Only
 * **Remove** an app: delete everything it put in place (shown first), or
   just stop managing it.
 * **Options** (the gear, or `,`) slide out from the right: the folders, the
-  GitHub token (kept in your keyring), the theme, and Yoink's own updates.
+  GitHub token (kept in your keyring), the theme, and Yoink's own entry.
 * **Yoink in the applications menu**: Options → Yoink → *Show Yoink in the
   applications menu* writes `~/.local/share/applications/yoink.desktop` and
   its icon, pointed at the AppImage (and kept pointed at it if it moves);
@@ -63,8 +63,15 @@ stored in the desktop's keyring (Secret Service), or in
 
 ### Yoink updating itself
 
-Yoink is distributed as an AppImage and can replace its own AppImage, from
-Releases or from Actions builds (Options → Yoink), then restart.
+As on Android, Yoink updates itself as one of your apps: add
+`singularity098/Yoink` (or Options → Yoink → *Add Yoink to your apps*) and
+pick `Yoink-x86_64.AppImage`, from Releases or Actions builds. It is then
+checked and updated with everything else, shown in the plan first, and
+installed last; **Restart Yoink** in the toolbar starts the new version.
+The new AppImage is renamed into place, so installing over the one that is
+running is safe, and installing the same version again (Force update)
+works too. No desktop entry is written for that deployment: Yoink's own
+(Options) follows whichever AppImage it runs from.
 
 ## Files
 
@@ -113,6 +120,8 @@ installs them itself instead of saving them for syncing.
   permission Yoink needs, and the theme.
 * **Yoink updating itself**: add `singularity098/Yoink` and pick
   `Yoink-android.apk` (Releases, or the Actions artifact for dev builds).
+  Every build is signed with the same key, so each installs over the last
+  without uninstalling.
 
 Needs Android 8 or newer. Split APK bundles (`.apks`, `.xapk`) are not
 supported.
@@ -128,13 +137,19 @@ cd android
 Needs JDK 17 or newer and the Android SDK (platform 36), found through
 `ANDROID_HOME` or `local.properties`. A release build is signed with the
 keystore named by `YOINK_KEYSTORE` (with `YOINK_KEYSTORE_PASSWORD`,
-`YOINK_KEY_ALIAS` and `YOINK_KEY_PASSWORD`), or with the debug key.
+`YOINK_KEY_ALIAS` and `YOINK_KEY_PASSWORD`). Without one, debug and release
+builds alike are signed with `android/yoink-dev.keystore` (password
+`yoink-dev`), kept in the repository so that every build, local or from CI,
+has the same signature and installs over the previous one. Android only
+refuses an older `versionCode`: CI numbers builds by run, local builds are 1.
 
-CI builds `Yoink-android.apk` on every push. To sign every build with one
-key, so each installs as an update of the last, add the repository secrets
+The dev key is public, so anyone could sign an APK Android would accept as
+an update of a dev-signed Yoink. CI builds `Yoink-android.apk` on every
+push; to sign them with a private key instead, add the repository secrets
 `ANDROID_KEYSTORE_BASE64` (the keystore, `base64 -w0 yoink.jks`),
 `ANDROID_KEYSTORE_PASSWORD`, `ANDROID_KEY_ALIAS` and `ANDROID_KEY_PASSWORD`.
-Make the keystore once, and keep it safe:
+Switching keys means uninstalling once, as Android refuses an update signed
+with another key. Make the keystore once, and keep it safe:
 
 ```bash
 keytool -genkeypair -keystore yoink.jks -alias yoink -keyalg RSA -keysize 4096 -validity 10000

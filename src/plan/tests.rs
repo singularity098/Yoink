@@ -338,3 +338,57 @@ fn removal_deletes_everything_recorded() {
     assert!(!h.join("apk/tool.apk").exists());
     assert!(h.join("apk").exists());
 }
+
+#[test]
+fn yoink_reinstalls_over_itself() {
+    use std::io::Read;
+    let env = env();
+    let lib = Library::default();
+    let ctx = PlanContext {
+        dirs: &env.dirs,
+        library: &lib,
+    };
+    let h = env.root.join("home");
+    let (mut app, mut dep) = app(Kind::AppImage);
+    app.source = Source::parse("singularity098/yoink").unwrap();
+    assert!(app.is_yoink());
+    let exe = h.join("Applications/Yoink-x86_64.AppImage");
+    // The version installed (and running) now, recorded as this deployment's.
+    write(&exe, b"old yoink", 0o755);
+    dep.installed = Some(Installed {
+        key: "k-v1".into(),
+        version: "v1".into(),
+        files: vec![exe.clone()],
+        when: 0,
+    });
+    let mut ai = elf(true);
+    ai[8] = b'A';
+    ai[9] = b'I';
+    ai[10] = 2;
+    let dir = env.root.join("staging/yoink");
+    let file = dir.join("download/Yoink-x86_64.AppImage");
+    write(&file, &ai, 0o644);
+    let s = Staged {
+        contents: Contents::default(),
+        dir,
+        file,
+        ftype: FileType::AppImage,
+        verified: None,
+        unpacked: None,
+    };
+    // The same version again (Force update), over the running AppImage.
+    let t = ready(build(&ctx, &app, &dep, &remote("Yoink-x86_64.AppImage", "v1"), &s).unwrap());
+    let rows = t.rows();
+    assert!(rows.iter().any(|r| r.verb == "Note" && r.text.contains("this is Yoink itself")));
+    assert!(!rows.iter().any(|r| r.tone == 8), "no warnings: {rows:?}");
+    assert_eq!(t.new_files, vec![exe.clone()], "no desktop entry of its own");
+    let mut running = std::fs::File::open(&exe).unwrap();
+    let (_, res) = apply(&t, &stops(&env));
+    res.unwrap();
+    assert_eq!(std::fs::read(&exe).unwrap(), ai);
+    // The running copy is untouched: the new one was renamed into place.
+    let mut old = String::new();
+    running.read_to_string(&mut old).unwrap();
+    assert_eq!(old, "old yoink");
+    assert!(!h.join("applications").exists());
+}

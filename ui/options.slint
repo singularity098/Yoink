@@ -29,17 +29,9 @@ export global Prefs {
 
     in property <string> version;
     in property <string> self-status;
-    in property <bool> self-update-available;
-    // Run as an AppImage (only then can it replace itself).
-    in property <bool> self-can-update;
-    in property <int> self-channel;
-    in property <bool> self-checking;
-    // Replaced on disk: a restart runs the new version.
-    in property <bool> self-updated;
-    callback set-self-channel(int);
-    callback restart();
-    callback check-self();
-    callback update-self();
+    // Yoink is one of the apps in the list (that is how it updates itself).
+    in property <bool> self-listed;
+    callback add-self();
     in property <string> config-path;
     // Yoink's own desktop entry: in the applications menu, and whether a
     // package put it there (then it is not Yoink's to remove).
@@ -298,7 +290,7 @@ export component OptionsPanel inherits Rectangle {
                             }
                             Text {
                                 text: Prefs.self-status;
-                                color: Prefs.self-update-available ? Theme.paint-a : Theme.text-faint;
+                                color: Theme.text-faint;
                                 font-size: Theme.font-small;
                                 wrap: word-wrap;
                             }
@@ -307,41 +299,12 @@ export component OptionsPanel inherits Rectangle {
                     HorizontalLayout {
                         spacing: 8px;
                         alignment: start;
-                        Chip {
-                            text: "Releases";
-                            selected: Prefs.self-channel == 0;
-                            tip: "Update to new releases";
-                            clicked => { root.interacted(); Prefs.set-self-channel(0); }
-                        }
-                        Chip {
-                            text: "Dev builds";
-                            selected: Prefs.self-channel == 1;
-                            tip: "Update to the newest Actions build (needs a token)";
-                            clicked => { root.interacted(); Prefs.set-self-channel(1); }
-                        }
-                    }
-                    HorizontalLayout {
-                        spacing: 8px;
-                        alignment: start;
                         BigButton {
-                            text: Prefs.self-checking ? "Checking…" : "Check";
-                            icon-line: Icons.refresh-line;
-                            enabled: !Prefs.self-checking;
-                            clicked => { root.interacted(); Prefs.check-self(); }
-                        }
-                        if Prefs.self-updated: BigButton {
-                            text: "Restart Yoink";
-                            icon-line: Icons.refresh-line;
-                            primary: true;
-                            clicked => { Prefs.restart(); }
-                        }
-                        if Prefs.self-update-available && !Prefs.self-updated: BigButton {
-                            text: "Update Yoink";
-                            icon-line: MoreIcons.download-line;
-                            primary: true;
-                            enabled: Prefs.self-can-update;
-                            tip: Prefs.self-can-update ? "Shows what will be replaced first" : "Only the AppImage can update itself";
-                            clicked => { root.interacted(); Prefs.update-self(); }
+                            text: Prefs.self-listed ? "Edit Yoink's entry" : "Add Yoink to your apps";
+                            icon-line: Prefs.self-listed ? Icons.gear-line : MoreIcons.plus-line;
+                            primary: !Prefs.self-listed;
+                            tip: Prefs.self-listed ? "Change where Yoink's updates come from" : "Opens the editor on Yoink's repository: pick the AppImage, from Releases or Actions";
+                            clicked => { root.interacted(); Prefs.add-self(); }
                         }
                     }
                     SettingRow {

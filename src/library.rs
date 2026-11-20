@@ -6,6 +6,10 @@ use std::path::PathBuf;
 
 use crate::config::{data_dir, write_atomic};
 
+/// Yoink's own repository: added like any app, it keeps Yoink up to date.
+pub const YOINK_OWNER: &str = "singularity098";
+pub const YOINK_REPO: &str = "Yoink";
+
 /// Where an app's files are published. Only GitHub for now; other forges
 /// (or plain URLs) become further variants.
 #[derive(Clone, Debug, Serialize, Deserialize, PartialEq, Eq)]
@@ -236,6 +240,16 @@ impl App {
     /// A file-name friendly form of the name: `My App` → `my-app`.
     pub fn slug(&self) -> String {
         slug(&self.name)
+    }
+
+    /// Whether this is Yoink itself (its own repository): updating it
+    /// replaces the running AppImage, and a restart runs the new version.
+    pub fn is_yoink(&self) -> bool {
+        match &self.source {
+            Source::Github { owner, repo } => {
+                owner.eq_ignore_ascii_case(YOINK_OWNER) && repo.eq_ignore_ascii_case(YOINK_REPO)
+            }
+        }
     }
 
     pub fn icon_path(&self) -> Option<PathBuf> {

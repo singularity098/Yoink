@@ -14,6 +14,9 @@ export global Apps {
     // Preparing or applying a plan.
     in property <bool> busy;
     in property <string> busy-text;
+    // Yoink itself was updated: a restart runs the new version.
+    in property <bool> restart-ready;
+    callback restart();
     callback add();
     callback check-all();
     callback update-all();

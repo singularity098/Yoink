@@ -124,8 +124,6 @@ pub struct Settings {
     /// A panel opens when the mouse rests on the window's edge.
     pub hover_opens: bool,
     pub native_wayland: bool,
-    /// Where Yoink's own updates come from: "releases" or "actions".
-    pub self_channel: String,
     pub width: f32,
     pub height: f32,
     pub maximized: bool,
@@ -140,7 +138,6 @@ impl Default for Settings {
             allow_failed_runs: false,
             hover_opens: false,
             native_wayland: false,
-            self_channel: "releases".into(),
             width: 1100.0,
             height: 760.0,
             maximized: false,

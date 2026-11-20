@@ -14,9 +14,13 @@ val commit: String = System.getenv("GITHUB_SHA") ?: runCatching {
     if (p.waitFor() == 0) out.toString().trim() else ""
 }.getOrDefault("")
 
-// A release keystore from the environment (CI secrets); without one,
-// release builds are signed with the debug key.
+// A release keystore from the environment (CI secrets). Without one, every
+// build (debug, release, local or CI) is signed with the dev keystore kept
+// in the repository, so each build installs over the last one instead of
+// Android refusing it for another signature (as it would with each
+// machine's own throwaway debug key).
 val keystorePath: String? = System.getenv("YOINK_KEYSTORE")?.takeIf { it.isNotBlank() && file(it).exists() }
+val devKeystore = rootProject.file("yoink-dev.keystore")
 
 android {
     namespace = "io.github.singularity098.yoink"
@@ -33,6 +37,12 @@ android {
     }
 
     signingConfigs {
+        create("dev") {
+            storeFile = devKeystore
+            storePassword = "yoink-dev"
+            keyAlias = "yoink-dev"
+            keyPassword = "yoink-dev"
+        }
         if (keystorePath != null) {
             create("release") {
                 storeFile = file(keystorePath)
@@ -44,11 +54,14 @@ android {
     }
 
     buildTypes {
+        debug {
+            signingConfig = signingConfigs.getByName("dev")
+        }
         release {
             isMinifyEnabled = true
             isShrinkResources = true
             proguardFiles(getDefaultProguardFile("proguard-android-optimize.txt"), "proguard-rules.pro")
-            signingConfig = signingConfigs.findByName("release") ?: signingConfigs.getByName("debug")
+            signingConfig = signingConfigs.findByName("release") ?: signingConfigs.getByName("dev")
         }
     }
 
