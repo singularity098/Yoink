@@ -3,6 +3,7 @@ package io.github.singularity098.yoink
 import android.app.Application
 import android.content.pm.PackageInfo
 import android.content.pm.PackageManager
+import android.net.Uri
 import android.os.Build
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateMapOf
@@ -63,6 +64,12 @@ class YoinkModel(app: Application) : AndroidViewModel(app) {
         private set
     var editor by mutableStateOf<Editor?>(null)
         private set
+    /** The folder installed APKs are also saved to, by name; null: none. */
+    var apkFolderName by mutableStateOf<String?>(null)
+        private set
+    /** The folder is set but Yoink lost access to it (revoked, or its storage removed). */
+    var apkFolderLost by mutableStateOf(false)
+        private set
     /** Whether the user lets Yoink install apps (Settings → Install unknown apps). */
     var canInstall by mutableStateOf(false)
         private set
@@ -73,6 +80,7 @@ class YoinkModel(app: Application) : AndroidViewModel(app) {
 
     init {
         refreshPresent()
+        refreshApkFolder()
         staging.deleteRecursively()
     }
 
@@ -273,11 +281,12 @@ class YoinkModel(app: Application) : AndroidViewModel(app) {
                     pending = record,
                 )
             }
+            val savedNote = saveCopy(id, apk)
             busy[id] = Busy("Installing…")
             when (val outcome = Installer.install(context, apk, pkg)) {
                 is Installer.Outcome.Success -> {
                     update(id) { it.copy(installed = record, pending = null, error = "") }
-                    message = "${label ?: a.name} ${info.versionName.orEmpty()} installed$checksumNote"
+                    message = "${label ?: a.name} ${info.versionName.orEmpty()} installed$checksumNote$savedNote"
                     return true
                 }
                 is Installer.Outcome.Failure -> {
@@ -297,6 +306,25 @@ class YoinkModel(app: Application) : AndroidViewModel(app) {
             busy.remove(id)
             withContext(Dispatchers.IO) { dir.deleteRecursively() }
             refreshPresent()
+        }
+    }
+
+    /**
+     * Copies the APK to the user's APK folder, if one is set, replacing the
+     * app's previous one. Returns a note for the message; never fails the install.
+     */
+    private suspend fun saveCopy(id: String, apk: File): String {
+        val tree = settings.apkFolder?.let(Uri::parse) ?: return ""
+        busy[id] = Busy("Saving the APK…")
+        return withContext(Dispatchers.IO) {
+            try {
+                if (!ApkFolder.usable(context, tree)) throw IOException("Yoink no longer has access to the folder")
+                val name = ApkFolder.save(context, tree, apk, ApkFolder.nameFor(apk.name), settings.savedApk(id))
+                settings.setSavedApk(id, name)
+                ""
+            } catch (e: Exception) {
+                "; the APK was not saved to the folder: ${e.message ?: e}"
+            }
         }
     }
 
@@ -346,6 +374,7 @@ class YoinkModel(app: Application) : AndroidViewModel(app) {
         apps = apps.filter { it.id != id }
         library.save(apps)
         library.iconFile(id).delete()
+        settings.setSavedApk(id, null)
     }
 
     fun iconFile(id: String) = library.iconFile(id)
@@ -366,6 +395,39 @@ class YoinkModel(app: Application) : AndroidViewModel(app) {
     fun changeAllowFailed(v: Boolean) {
         allowFailed = v
         settings.allowFailed = v
+    }
+
+    fun refreshApkFolder() {
+        val tree = settings.apkFolder?.let(Uri::parse)
+        if (tree == null) {
+            apkFolderName = null
+            apkFolderLost = false
+            return
+        }
+        apkFolderLost = !ApkFolder.usable(context, tree)
+        apkFolderName = if (apkFolderLost) "the chosen folder" else ApkFolder.describe(context, tree)
+    }
+
+    /** The folder the user picked for saving APKs (from Android's folder picker); null: stop saving. */
+    fun setApkFolder(tree: Uri?) {
+        settings.apkFolder?.let(Uri::parse)?.takeIf { it != tree }?.let { ApkFolder.forget(context, it) }
+        if (tree == null) {
+            settings.apkFolder = null
+            refreshApkFolder()
+            message = "APKs are no longer saved to a folder"
+            return
+        }
+        try {
+            ApkFolder.remember(context, tree)
+        } catch (e: Exception) {
+            message = "Android did not give Yoink lasting access to that folder"
+            return
+        }
+        // Names saved in another folder mean nothing in this one.
+        if (settings.apkFolder != tree.toString()) apps.forEach { settings.setSavedApk(it.id, null) }
+        settings.apkFolder = tree.toString()
+        refreshApkFolder()
+        message = "APKs will be saved to $apkFolderName"
     }
 
     // -------------------------------------------------------------- editor

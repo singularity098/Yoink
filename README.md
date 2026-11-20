@@ -140,7 +140,7 @@ a package.
 
 `android/` holds Yoink for Android phones: a smaller Yoink (Kotlin and
 Jetpack Compose, in the same look and themes) that only deals in APKs, and
-installs them itself instead of saving them for syncing.
+installs them itself (and can also save a copy of each to a folder).
 
 * **Add** an app by its repository, from Releases (or pre-releases) or
   Actions builds, as on the desktop. Yoink picks the APK for the phone's
@@ -157,7 +157,12 @@ installs them itself instead of saving them for syncing.
 * **Remove** an app: uninstall it (Android asks), or only stop managing it.
 * **Options**: the GitHub token (encrypted with a key in the Android
   Keystore), allowing failed Actions runs, the *Install unknown apps*
-  permission Yoink needs, and the theme.
+  permission Yoink needs, the APK folder, and the theme.
+* **APK folder** (Options → Saving APKs): pick any folder with Android's
+  folder picker (shared storage, an SD card, a synced or cloud folder) and
+  each APK Yoink installs is also saved there, replacing that app's
+  previous APK. A failed save never stops the install; it is noted in the
+  message instead.
 * **Yoink updating itself**: add `singularity098/Yoink` and pick
   `Yoink-android.apk` (Releases, or the Actions artifact for dev builds).
   Every build is signed with the same key, so each installs over the last

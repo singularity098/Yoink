@@ -115,5 +115,6 @@ class MainActivity : ComponentActivity() {
         super.onResume()
         // Installs, uninstalls and the install permission may have changed meanwhile.
         model.refreshPresent()
+        model.refreshApkFolder()
     }
 }
