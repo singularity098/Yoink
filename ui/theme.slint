@@ -6,7 +6,7 @@
 // What the window shows in its base state is black at 50%; what slides or
 // pops over it (the file browser, settings, menus) is black at 95%.
 
-// A theme: a fixed look picked by name in Settings. Abyss is the default.
+// A theme: a fixed look picked by name in Settings. Iris is the default.
 // The names are stored in settings.json: never rename one.
 export struct ThemeLook {
     name: string,
@@ -23,8 +23,8 @@ export struct ThemeLook {
 }
 
 export global Theme {
-    // Index into `looks`; set from Rust (Settings.display.theme). 2 is Abyss.
-    in-out property <int> index: 2;
+    // Index into `looks`; set from Rust (Settings.display.theme). 0 is Iris.
+    in-out property <int> index: 0;
     // Kept from Chippy, where it marks a phone; always false here.
     in property <bool> mobile;
 

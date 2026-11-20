@@ -441,7 +441,7 @@ impl App {
         let theme = names
             .iter()
             .position(|n| n.as_str() == self.settings.theme)
-            .or_else(|| names.iter().position(|n| n.as_str() == "Abyss"))
+            .or_else(|| names.iter().position(|n| n.as_str() == "Iris"))
             .unwrap_or(0);
         ui.global::<Theme>().set_index(theme as i32);
         ui.set_hover_opens(self.settings.hover_opens);
@@ -2093,7 +2093,7 @@ impl App {
             names
                 .iter()
                 .position(|n| n.as_str() == self.settings.theme)
-                .or_else(|| names.iter().position(|n| n.as_str() == "Abyss"))
+                .or_else(|| names.iter().position(|n| n.as_str() == "Iris"))
                 .unwrap_or(0) as i32,
         );
         p.set_check_on_startup(self.settings.check_on_startup);

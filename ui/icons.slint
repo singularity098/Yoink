@@ -8,9 +8,9 @@ import { Theme } from "theme.slint";
 
 export global IconArt {
     pure callback draw(line: string, solid: string, weight: float, grid: float) -> image;
-    // Yoink's logo (assets/yoink-icon.svg) recoloured: `line` for the rings,
-    // `deep` for the paper and its grid, `ink` for the claw.
-    pure callback logo(line: color, deep: color, ink: color) -> image;
+    // Yoink's logo (assets/yoink-icon.svg) recoloured with a theme's three
+    // paint colours.
+    pure callback logo(a: color, b: color, c: color) -> image;
 }
 
 export global Icons {
@@ -99,11 +99,11 @@ export component Icon inherits Image {
     accessible-role: none;
 }
 
-// Yoink's logo, the blueprint claw of assets/yoink-icon.svg, drawn in the
+// Yoink's logo, the magnet and carton of assets/yoink-icon.svg, drawn in the
 // theme's colours so it follows the theme picked in Options.
 export component Logo inherits Image {
     width: 24px;
     height: 24px;
-    source: IconArt.logo(Theme.paint-b, Theme.paint-c, Theme.text);
+    source: IconArt.logo(Theme.paint-a, Theme.paint-b, Theme.paint-c);
     accessible-role: none;
 }

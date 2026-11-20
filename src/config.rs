@@ -142,7 +142,7 @@ impl Default for Settings {
     fn default() -> Self {
         Settings {
             dirs: Dirs::default(),
-            theme: "Abyss".into(),
+            theme: "Iris".into(),
             check_on_startup: true,
             allow_failed_runs: false,
             hover_opens: false,

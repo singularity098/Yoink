@@ -20,7 +20,7 @@ class Settings(context: Context) {
     private val saved = context.getSharedPreferences("saved_apks", Context.MODE_PRIVATE)
 
     var theme: Int
-        get() = prefs.getInt("theme", 2)
+        get() = prefs.getInt("theme", 0)
         set(v) = prefs.edit().putInt("theme", v).apply()
 
     /** Take Actions builds from failed runs too. */

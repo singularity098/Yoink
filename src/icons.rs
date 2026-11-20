@@ -26,12 +26,12 @@ pub fn install(ui: &MainWindow) {
 /// The logo as shipped (the desktop entry's icon, the launcher's).
 const LOGO: &str = include_str!("../assets/yoink-icon.svg");
 
-fn logo(line: Color, deep: Color, ink: Color) -> Image {
-    let key = [line, deep, ink].map(|c| u32::from_be_bytes([c.red(), c.green(), c.blue(), c.alpha()]));
+fn logo(a: Color, b: Color, c: Color) -> Image {
+    let key = [a, b, c].map(|c| u32::from_be_bytes([c.red(), c.green(), c.blue(), c.alpha()]));
     if let Some(image) = LOGOS.with(|c| c.borrow().get(&key).cloned()) {
         return image;
     }
-    let image = Image::load_from_svg_data(logo_svg(rgb(line), rgb(deep), rgb(ink)).as_bytes())
+    let image = Image::load_from_svg_data(logo_svg(rgb(a), rgb(b), rgb(c)).as_bytes())
         .unwrap_or_else(|e| {
             log::warn!("logo could not be drawn: {e:?}");
             Image::default()
@@ -55,17 +55,55 @@ fn hex(c: Rgb) -> String {
     format!("#{:02x}{:02x}{:02x}", c[0], c[1], c[2])
 }
 
-/// The logo with its blueprint colours swapped for a theme's: the paper is
-/// `deep` sunk nearly to black, its grid a little lighter, the rings and
-/// badge `line`, the claw `ink` lifted towards white.
-fn logo_svg(line: Rgb, deep: Rgb, ink: Rgb) -> String {
-    let paper = mix(deep, [10, 10, 16], 0.22);
-    let grid = mix(deep, paper, 0.4);
-    let ink = mix(ink, [255, 255, 255], 0.5);
-    LOGO.replace("#0b2a4a", &hex(paper))
-        .replace("#2a5a8c", &hex(grid))
-        .replace("#7fb2ff", &hex(line))
-        .replace("#e8f1ff", &hex(ink))
+/// The logo's colours for a theme's paint `a`, `b` and `c`, in the order of
+/// `IRIS`: the paint itself, then the tile (`a` sunk nearly to black), the
+/// poles (`a` lifted nearly to white), the field lines and carton outline
+/// (between `a` and `b`, lightened) and the carton's fill (between `a` and
+/// `c`, darkened). Iris gives back the colours the SVG is drawn in.
+fn logo_colours(a: Rgb, b: Rgb, c: Rgb) -> [Rgb; 9] {
+    let night = [8, 7, 26];
+    let white = [255, 255, 255];
+    let carton = mix(a, c, 0.5);
+    [
+        a,
+        b,
+        c,
+        mix(a, night, 0.15),
+        mix(a, [6, 6, 12], 0.05),
+        mix(a, white, 0.15),
+        mix(mix(a, b, 0.5), white, 0.7),
+        mix(carton, night, 0.35),
+        mix(carton, night, 0.15),
+    ]
+}
+
+/// The colours assets/yoink-icon.svg is drawn in: `logo_colours` of Iris.
+const IRIS: [&str; 9] = [
+    "#7278fe", "#c688d6", "#a85eea", "#18183c", "#0b0c18", "#eaebff", "#baa6f0", "#372a66", "#1c163b",
+];
+
+/// The logo with its Iris colours swapped for a theme's, in one pass so a
+/// colour put in is never swapped again.
+fn logo_svg(a: Rgb, b: Rgb, c: Rgb) -> String {
+    let to = logo_colours(a, b, c).map(hex);
+    let mut out = String::with_capacity(LOGO.len());
+    let mut rest = LOGO;
+    while let Some(i) = rest.find('#') {
+        out.push_str(&rest[..i]);
+        rest = &rest[i..];
+        match IRIS.iter().position(|k| rest.get(..7) == Some(*k)) {
+            Some(n) => {
+                out.push_str(&to[n]);
+                rest = &rest[7..];
+            }
+            None => {
+                out.push('#');
+                rest = &rest[1..];
+            }
+        }
+    }
+    out.push_str(rest);
+    out
 }
 
 fn draw(line: SharedString, solid: SharedString, weight: f32, grid: f32) -> Image {
@@ -237,12 +275,21 @@ mod tests {
     }
 
     #[test]
-    fn logo_takes_the_theme_colours() {
-        let s = logo_svg([0x2e, 0xc8, 0xe8], [0x3a, 0x7b, 0xff], [255, 255, 255]);
-        for blueprint in ["#0b2a4a", "#2a5a8c", "#7fb2ff", "#e8f1ff"] {
-            assert!(!s.contains(blueprint), "{blueprint} left in");
+    fn logo_is_drawn_in_iris() {
+        let iris = logo_colours([0x72, 0x78, 0xfe], [0xc6, 0x88, 0xd6], [0xa8, 0x5e, 0xea]);
+        assert_eq!(iris.map(hex), IRIS.map(String::from));
+        for k in IRIS {
+            assert!(LOGO.contains(k), "{k} not in the SVG");
         }
-        assert!(s.contains("#2ec8e8") && s.contains("#ffffff"));
+        assert_eq!(logo_svg([0x72, 0x78, 0xfe], [0xc6, 0x88, 0xd6], [0xa8, 0x5e, 0xea]), LOGO);
+    }
+
+    #[test]
+    fn logo_takes_the_theme_colours() {
+        // Abyss: paint b is Iris's paint a, so a one-pass swap matters.
+        let s = logo_svg([0x7f, 0xf5, 0xe0], [0x72, 0x78, 0xfe], [0x3a, 0x7b, 0xff]);
+        assert!(s.contains("#7ff5e0") && s.contains("#3a7bff"));
+        assert!(!s.contains("#c688d6") && !s.contains("#a85eea"));
         let image = Image::load_from_svg_data(s.as_bytes()).unwrap();
         assert_eq!((image.size().width, image.size().height), (256, 256));
     }

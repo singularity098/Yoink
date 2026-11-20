@@ -40,7 +40,7 @@ data class Look(
 
 private fun c(hex: Long) = Color(0xFF000000 or hex)
 
-/** The same looks, in the same order, as the desktop app. Abyss (index 2) is the default. */
+/** The same looks, in the same order, as the desktop app. Iris (index 0) is the default. */
 val Looks = listOf(
     Look("Iris", c(0x7278fe), c(0xc688d6), c(0xa85eea), c(0xffffff), c(0xe6e6ea), c(0x8a8a94)),
     Look("Ember", c(0xffb36b), c(0xff6a3d), c(0xe0336f), c(0xffb36b), c(0xf0e2d8), c(0x9c8a80)),

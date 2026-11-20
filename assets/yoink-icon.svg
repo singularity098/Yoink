@@ -1,32 +1,43 @@
 <svg xmlns="http://www.w3.org/2000/svg" width="256" height="256" viewBox="0 0 256 256">
-  <!-- A prize claw lifting a crate, drawn as "Detail A" of a blueprint.
-       Inside the app these four colours are swapped for the theme's
-       (src/icons.rs, `logo_svg`): #0b2a4a paper, #2a5a8c grid,
-       #7fb2ff line work, #e8f1ff ink. Keep them distinct. -->
+  <!-- A horseshoe magnet pulling a taped carton up its field lines, in the
+       Iris theme. Inside the app these colours are swapped for the theme's
+       (src/icons.rs, `logo_svg`): #7278fe, #c688d6 and #a85eea are the
+       theme's paint a, b and c; the rest are mixed from them there
+       (#18183c and #0b0c18 the tile, #eaebff the poles, #baa6f0 the field
+       lines and carton, #372a66 and #1c163b the carton's fill). Keep them
+       distinct, and write any other colour in three-digit form. -->
   <defs>
-    <pattern id="grid" width="14" height="14" patternUnits="userSpaceOnUse">
-      <path d="M 14 0 H 0 V 14" fill="none" stroke="#2a5a8c" stroke-width="1"/>
-    </pattern>
-    <clipPath id="disc"><circle cx="128" cy="128" r="112"/></clipPath>
+    <linearGradient id="tile" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-color="#18183c"/>
+      <stop offset="1" stop-color="#0b0c18"/>
+    </linearGradient>
+    <radialGradient id="glow" cx=".5" cy=".3" r=".7">
+      <stop offset="0" stop-color="#7278fe" stop-opacity=".32"/>
+      <stop offset="1" stop-color="#7278fe" stop-opacity="0"/>
+    </radialGradient>
+    <linearGradient id="magnet" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0" stop-color="#c688d6"/>
+      <stop offset=".5" stop-color="#a85eea"/>
+      <stop offset="1" stop-color="#7278fe"/>
+    </linearGradient>
+    <linearGradient id="carton" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-color="#372a66"/>
+      <stop offset="1" stop-color="#1c163b"/>
+    </linearGradient>
   </defs>
-  <circle cx="128" cy="128" r="112" fill="#0b2a4a"/>
-  <rect width="256" height="256" fill="url(#grid)" clip-path="url(#disc)"/>
-  <g transform="translate(128 132) scale(1.12) translate(-128 -116)">
-    <g fill="none" stroke="#e8f1ff" stroke-width="5.5" stroke-linecap="round" stroke-linejoin="round">
-      <path d="M 128 18 V 86"/>
-      <rect x="104" y="128" width="48" height="44" rx="2" fill="#e8f1ff" fill-opacity="0.12"/>
-      <path d="M 128 128 V 172" stroke-width="2.75" stroke-dasharray="4 4"/>
-      <rect x="98" y="86" width="60" height="24" rx="5" fill="#0b2a4a"/>
-      <path d="M 110 110 Q 84 134 97 160 L 108 160"/>
-      <path d="M 146 110 Q 172 134 159 160 L 148 160"/>
-    </g>
-    <g fill="#0b2a4a" stroke="#e8f1ff" stroke-width="3.3">
-      <circle cx="110" cy="110" r="4.5"/>
-      <circle cx="146" cy="110" r="4.5"/>
-    </g>
+  <rect x="8" y="8" width="240" height="240" rx="56" fill="url(#tile)"/>
+  <rect x="8" y="8" width="240" height="240" rx="56" fill="url(#glow)"/>
+  <path d="M78 122 V102 A50 50 0 0 1 178 102 V122" fill="none" stroke="url(#magnet)" stroke-width="32"/>
+  <path d="M78 122 V146 M178 122 V146" stroke="#eaebff" stroke-width="32"/>
+  <path d="M84 68 A44 44 0 0 1 120 52" fill="none" stroke="#fff" stroke-width="5" stroke-linecap="round" opacity=".35"/>
+  <g fill="none" stroke="#baa6f0" stroke-width="3" stroke-dasharray="5 6" stroke-linecap="round" opacity=".6">
+    <path d="M92 160 Q128 178 164 160"/>
+    <path d="M84 167 Q128 196 172 167"/>
   </g>
-  <circle cx="128" cy="128" r="112" fill="none" stroke="#7fb2ff" stroke-width="5"/>
-  <circle cx="128" cy="128" r="122" fill="none" stroke="#7fb2ff" stroke-width="2" stroke-dasharray="6 6"/>
-  <rect x="186" y="200" width="44" height="30" rx="4" fill="#0b2a4a" stroke="#7fb2ff" stroke-width="3"/>
-  <path d="M 201 224 L 208 205 L 215 224 M 203.6 217.5 H 212.4" fill="none" stroke="#e8f1ff" stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round"/>
+  <g transform="translate(128 204) rotate(7) scale(1.22) translate(-128 -204)">
+    <rect x="100" y="180" width="56" height="46" rx="6" fill="url(#carton)" stroke="#baa6f0" stroke-width="5"/>
+    <rect x="120" y="182" width="16" height="42" fill="#baa6f0" opacity=".35"/>
+    <path d="M102 195 H154" stroke="#baa6f0" stroke-width="3" opacity=".5"/>
+  </g>
+  <rect x="9" y="9" width="238" height="238" rx="55" fill="none" stroke="#fff" stroke-opacity=".09" stroke-width="2"/>
 </svg>
