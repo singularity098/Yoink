@@ -11,7 +11,7 @@ import { BigButton, IconButton, Tips } from "widgets.slint";
 import { Icon, Icons, MoreIcons, IconArt } from "icons.slint";
 import { TooltipLayer } from "tooltip.slint";
 import { AppRow, DepRow, DirRow, PlanRow, Cand, EdDep, PickOpt } from "types.slint";
-import { Apps, AppList } from "applist.slint";
+import { Apps, AppList, SortButton } from "applist.slint";
 import { Prefs, OptionsPanel } from "options.slint";
 import { Editor, EditorDialog } from "editor.slint";
 import { PlanView, Picker, Confirm, PlanDialog, PickerDialog, ConfirmDialog } from "dialogs.slint";
@@ -161,6 +161,7 @@ component Toolbar inherits HorizontalLayout {
         clicked => { Apps.restart(); }
     }
     Rectangle { horizontal-stretch: 1; }
+    if Apps.rows.length > 1: SortButton { }
     if Apps.busy: HorizontalLayout {
         spacing: 8px;
         Text {
