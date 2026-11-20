@@ -22,6 +22,8 @@ pub struct Dirs {
     pub apk: String,
     pub desktop: String,
     pub icons: String,
+    /// Each app's files in a subfolder of its own (the packages folder).
+    pub app_subdirs: bool,
 }
 
 impl Default for Dirs {
@@ -39,6 +41,7 @@ impl Default for Dirs {
             apk: String::new(),
             desktop: "~/.local/share/applications".into(),
             icons: "~/.local/share/icons".into(),
+            app_subdirs: true,
         }
     }
 }
@@ -127,6 +130,9 @@ pub struct Settings {
     pub width: f32,
     pub height: f32,
     pub maximized: bool,
+    /// The order of the app list: added, name, updated, updates, repo.
+    pub sort: String,
+    pub sort_reversed: bool,
 }
 
 impl Default for Settings {
@@ -141,6 +147,8 @@ impl Default for Settings {
             width: 1100.0,
             height: 760.0,
             maximized: false,
+            sort: "added".into(),
+            sort_reversed: false,
         }
     }
 }

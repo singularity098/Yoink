@@ -27,6 +27,55 @@ export global Apps {
     callback remove(int);
     callback open-page(int);
     callback cancel-busy();
+    // The order of the list: an index into sort-names, and reversed or not.
+    in property <[string]> sort-names;
+    in property <int> sort;
+    in property <bool> sort-reversed;
+    callback set-sort(int);
+    callback set-sort-reversed(bool);
+}
+
+// Picks the order of the list.
+export component SortButton inherits Rectangle {
+    horizontal-stretch: 0;
+    min-width: button.min-width;
+    min-height: button.min-height;
+    button := BigButton {
+        width: parent.width;
+        height: parent.height;
+        text: "Sort: " + Apps.sort-names[Apps.sort] + (Apps.sort-reversed ? " (reversed)" : "");
+        tip: "The order of the list";
+        clicked => { menu.show(); }
+    }
+    menu := PopupWindow {
+        x: root.width - 220px;
+        y: root.height + 4px;
+        width: 220px;
+        Rectangle {
+            background: Theme.popup;
+            border-radius: 10px;
+            border-width: 1px;
+            border-color: Theme.border-strong;
+            drop-shadow-blur: 16px;
+            drop-shadow-color: #000000a0;
+            VerticalLayout {
+                padding: 6px;
+                for name[i] in Apps.sort-names: MenuItem {
+                    text: name;
+                    checkable: true;
+                    checked: i == Apps.sort;
+                    clicked => { Apps.set-sort(i); }
+                }
+                Rectangle { height: 1px; background: Theme.border; }
+                MenuItem {
+                    text: "Reverse order";
+                    checkable: true;
+                    checked: Apps.sort-reversed;
+                    clicked => { Apps.set-sort-reversed(!Apps.sort-reversed); }
+                }
+            }
+        }
+    }
 }
 
 // The app's icon, or its first letter on the theme's paint.

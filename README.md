@@ -8,7 +8,7 @@ Add an app by its GitHub repository and Yoink fetches its newest build, from
 | Kind | Where it goes |
 | --- | --- |
 | AppImage | Your AppImages folder. An AppImage inside a zip is unpacked and the zip discarded; the previous version's AppImage is deleted (or overwritten, same name). |
-| Binary | A lone executable goes to your bin folder. A package laid out as `bin/`, `lib/`, `share/` goes to your bin, lib and share folders. The archive is kept in the packages folder; the previous one is removed. |
+| Binary | A lone executable goes to your bin folder. A package laid out as `bin/`, `lib/`, `share/` goes to your bin, lib and share folders. The archive is kept in the packages folder (in a subfolder per app, unless you turn that off in Options); the previous one is removed. |
 | Plugin | `.vst3` and `.lv2` bundles and `.clap` plugins go to their folders, replacing older versions. VST2 plugins are plain `.so` files, so you pick them once. The archive is kept in the packages folder. |
 | APK | Saved to your APK folder (for syncing to your phone), replacing the previous APK. Installing it on the phone is up to you. |
 
@@ -38,14 +38,19 @@ file that will be downloaded, copied, replaced, kept and deleted. Only
   downloaded with a token.
 * **Check for updates** (F5), **Update all**, **Update** one app, or
   **Force update** (reinstall) from its ⋮ menu.
+* **Sort** the list (the *Sort* button, right of the toolbar): by date
+  added, name, last updated, updates first or repository, optionally
+  reversed. The choice is remembered.
 * **Remove** an app: delete everything it put in place (shown first), or
   just stop managing it.
 * **Options** (the gear, or `,`) slide out from the right: the folders, the
   GitHub token (kept in your keyring), the theme, and Yoink's own entry.
 * **Yoink in the applications menu**: Options → Yoink → *Show Yoink in the
-  applications menu* writes `~/.local/share/applications/yoink.desktop` and
-  its icon, pointed at the Yoink executable (and kept pointed at it if it moves);
-  turning it off removes them. From a terminal: `yoink --install-desktop`
+  applications menu* writes `yoink.desktop` to your Desktop entries folder
+  and `yoink.svg` to your Icons folder (the same folders as every other
+  app's), pointed at the Yoink executable (and kept pointed at it if it
+  moves, and moved along if you change those folders); turning it off
+  removes them. From a terminal: `yoink --install-desktop`
   and `yoink --remove-desktop`. An entry a package installed is left alone.
 * **Desktop entries in a synced folder** (KDE Plasma): desktops only look
   for apps in `~/.local/share/applications` and the system's folders. Set

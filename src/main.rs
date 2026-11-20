@@ -17,7 +17,8 @@ fn main() -> anyhow::Result<()> {
                  --probe shows what a repository offers and, with a pattern, the build it\n\
                  would install (no downloads).\n\
                  --install-desktop puts Yoink in the applications menu (a desktop entry\n\
-                 and icon in ~/.local/share); --remove-desktop takes it out.\n\
+                 and icon in the Desktop entries and Icons folders set in Options);\n\
+                 --remove-desktop takes it out.\n\
                  --install-plasma-env writes ~/.config/plasma-workspace/env/yoink.sh so KDE\n\
                  Plasma looks in the desktop entries folder set in Options (from the next\n\
                  login); --remove-plasma-env deletes it; --plasma-status says where it stands.\n\n\
@@ -28,12 +29,12 @@ fn main() -> anyhow::Result<()> {
             Ok(())
         }
         Some("--install-desktop") => {
-            let path = yoink::desktop::install_own_entry()?;
+            let path = yoink::desktop::install_own_entry(&yoink::config::Settings::load().dirs)?;
             println!("Wrote {}", path.display());
             Ok(())
         }
         Some("--remove-desktop") => {
-            yoink::desktop::remove_own_entry()?;
+            yoink::desktop::remove_own_entry(&yoink::config::Settings::load().dirs)?;
             println!("Removed Yoink's desktop entry");
             Ok(())
         }

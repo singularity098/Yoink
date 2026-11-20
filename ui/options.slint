@@ -25,7 +25,9 @@ export global Prefs {
     in property <bool> allow-failed;
     in property <bool> hover-opens;
     in property <bool> native-wayland;
-    // By id: check-on-startup, allow-failed, hover-opens, native-wayland.
+    in property <bool> app-subdirs;
+    // By id: check-on-startup, allow-failed, hover-opens, native-wayland,
+    // app-subdirs.
     callback set-flag(string, bool);
 
     in property <string> version;
@@ -225,6 +227,14 @@ export component OptionsPanel inherits Rectangle {
                     for d in Prefs.dirs: DirLine {
                         entry: d;
                         interacted => { root.interacted(); }
+                    }
+                    SettingRow {
+                        label: "A folder per app";
+                        detail: "Keep each app's archives in its own subfolder of the packages folder. Off, they all go in the packages folder itself.";
+                        Toggle {
+                            checked: Prefs.app-subdirs;
+                            toggled(v) => { root.interacted(); Prefs.set-flag("app-subdirs", v); }
+                        }
                     }
                     SettingRow {
                         label: "Show these desktop entries in KDE Plasma";

@@ -795,11 +795,11 @@ fn keep_package(
     actions: &mut Vec<Action>,
     new_files: &mut Vec<PathBuf>,
 ) -> anyhow::Result<()> {
-    let dest = ctx
-        .dirs
-        .path("package")?
-        .join(app.slug())
-        .join(file_name(&staged.file));
+    let mut dest = ctx.dirs.path("package")?;
+    if ctx.dirs.app_subdirs {
+        dest.push(app.slug());
+    }
+    dest.push(file_name(&staged.file));
     let existing = ctx.existing(&dest, dep);
     actions.push(Action::KeepPackage {
         src: staged.file.clone(),

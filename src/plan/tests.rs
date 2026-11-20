@@ -25,6 +25,7 @@ fn env() -> Env {
         apk: d("apk"),
         desktop: d("applications"),
         icons: d("icons"),
+        app_subdirs: true,
     };
     Env {
         _tmp: tmp,
@@ -157,6 +158,22 @@ fn binary_prefix_layout() {
     let mode = std::fs::metadata(h.join("bin/tool")).unwrap().permissions().mode();
     assert_eq!(mode & 0o111, 0o111);
     assert_eq!(std::fs::read(h.join("share/tool/data.txt")).unwrap(), b"d");
+}
+
+#[test]
+fn packages_without_app_subdirs() {
+    let mut env = env();
+    env.dirs.app_subdirs = false;
+    let lib = Library::default();
+    let ctx = PlanContext {
+        dirs: &env.dirs,
+        library: &lib,
+    };
+    let (app, dep) = app(Kind::Binary);
+    let s = staged(&env, "tool-1.0.tar.gz", &[("tool-1.0/bin/tool", elf(true), 0o755)]);
+    let t = ready(build(&ctx, &app, &dep, &remote("tool-1.0.tar.gz", "v1.0"), &s).unwrap());
+    let h = env.root.join("home");
+    assert_eq!(t.new_files[0], h.join("packages/tool-1.0.tar.gz"));
 }
 
 #[test]

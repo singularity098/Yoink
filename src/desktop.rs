@@ -2,6 +2,7 @@
 //! where it was delivered, and writing one for an app that has none. Also
 //! Yoink's own place on the desktop: its window system and desktop entry.
 
+use crate::config::Dirs;
 use std::path::{Path, PathBuf};
 
 /// The app id Yoink's window gives the window manager.
@@ -140,7 +141,7 @@ fn one_line(s: &str) -> String {
 
 /// Picks the winit backend: through XWayland on a Wayland desktop unless
 /// native Wayland is asked for (as in Chippy), and names the window.
-pub fn select_backend(native_wayland: bool) {
+pub fn select_backend(native_wayland: bool, dirs: &Dirs) {
     let native_wayland = match std::env::var("YOINK_WAYLAND").as_deref() {
         Ok("1") | Ok("true") => true,
         Ok("0") | Ok("false") => false,
@@ -159,7 +160,7 @@ pub fn select_backend(native_wayland: bool) {
         b.with_x11();
         selector = selector.with_winit_event_loop_builder(b);
     }
-    refresh_own_entry(on_wayland && (!has_x11 || native_wayland));
+    refresh_own_entry(dirs, on_wayland && (!has_x11 || native_wayland));
     if let Err(e) = selector.select() {
         log::warn!("could not set up the window system as asked: {e}");
     }
@@ -189,6 +190,10 @@ pub enum OwnEntry {
 /// Marks the entries Yoink writes for itself.
 const SELF_MARK: &str = "X-Yoink-Self";
 
+/// The file names of Yoink's entry and icon, in the folders set in Options.
+const OWN_ENTRY_NAME: &str = "yoink.desktop";
+const OWN_ICON_NAME: &str = "yoink.svg";
+
 fn data_home() -> Option<PathBuf> {
     std::env::var_os("XDG_DATA_HOME")
         .map(PathBuf::from)
@@ -196,13 +201,13 @@ fn data_home() -> Option<PathBuf> {
         .or_else(|| std::env::var_os("HOME").map(|h| PathBuf::from(h).join(".local/share")))
 }
 
-/// The entry Yoink writes, in the user's applications folder.
-fn own_entry_path() -> Option<PathBuf> {
-    data_home().map(|d| d.join("applications/yoink.desktop"))
-}
-
-fn own_icon_path() -> Option<PathBuf> {
-    data_home().map(|d| d.join("icons/hicolor/scalable/apps/yoink.svg"))
+/// Where Yoink writes its entry and icon: the Desktop entries and Icons
+/// folders set in Options, as for every app it manages.
+fn own_paths(dirs: &Dirs) -> anyhow::Result<(PathBuf, PathBuf)> {
+    Ok((
+        dirs.path("desktop")?.join(OWN_ENTRY_NAME),
+        dirs.path("icons")?.join(OWN_ICON_NAME),
+    ))
 }
 
 /// What Yoink is run as: its AppImage, or else this executable.
@@ -210,17 +215,35 @@ fn own_exe() -> Option<PathBuf> {
     crate::plan::running_exe()
 }
 
-/// Finds `yoink.desktop` where desktops look (the user's folder first) and
-/// says whose it is.
-pub fn own_entry() -> OwnEntry {
+/// Every place a `yoink.desktop` may be: the folder set in Options first,
+/// then where desktops look (the user's folder, then the system's).
+fn entry_candidates(dirs: &Dirs) -> Vec<PathBuf> {
     let data_dirs =
         std::env::var("XDG_DATA_DIRS").unwrap_or_else(|_| "/usr/local/share:/usr/share".into());
-    let found = data_home()
+    let mut out: Vec<PathBuf> = Vec::new();
+    let configured = own_paths(dirs).ok().map(|p| p.0);
+    let searched = data_home()
         .into_iter()
         .chain(data_dirs.split(':').filter(|d| !d.is_empty()).map(PathBuf::from))
-        .map(|d| d.join("applications/yoink.desktop"))
-        .find(|p| p.is_file());
-    let Some(path) = found else { return OwnEntry::Missing };
+        .map(|d| d.join("applications").join(OWN_ENTRY_NAME));
+    for p in configured.into_iter().chain(searched) {
+        if !out.contains(&p) {
+            out.push(p);
+        }
+    }
+    out
+}
+
+fn is_own(path: &Path) -> bool {
+    std::fs::read_to_string(path).is_ok_and(|t| field(&t, SELF_MARK).is_some())
+}
+
+/// Finds `yoink.desktop` (in the folder set in Options first, then where
+/// desktops look) and says whose it is.
+pub fn own_entry(dirs: &Dirs) -> OwnEntry {
+    let Some(path) = entry_candidates(dirs).into_iter().find(|p| p.is_file()) else {
+        return OwnEntry::Missing;
+    };
     let text = std::fs::read_to_string(&path).unwrap_or_default();
     if field(&text, SELF_MARK).is_none() {
         OwnEntry::System(path)
@@ -228,6 +251,32 @@ pub fn own_entry() -> OwnEntry {
         OwnEntry::Hidden(path)
     } else {
         OwnEntry::Shown(path)
+    }
+}
+
+/// Deletes an entry Yoink wrote for itself and the icon it names (when
+/// that is Yoink's icon file).
+fn delete_own(entry: &Path) {
+    let text = std::fs::read_to_string(entry).unwrap_or_default();
+    if field(&text, SELF_MARK).is_none() {
+        return;
+    }
+    let _ = std::fs::remove_file(entry);
+    if let Some(icon) = field(&text, "Icon").map(PathBuf::from) {
+        if icon.is_absolute() && icon.file_name().is_some_and(|n| n == OWN_ICON_NAME) {
+            let _ = std::fs::remove_file(icon);
+        }
+    }
+}
+
+/// Entries Yoink wrote for itself somewhere other than `keep` (an older
+/// version wrote to `~/.local/share/applications`, or the folder changed).
+fn delete_strays(dirs: &Dirs, keep: &Path) {
+    for p in entry_candidates(dirs) {
+        if p != keep && is_own(&p) {
+            log::info!("removing Yoink's old desktop entry {}", p.display());
+            delete_own(&p);
+        }
     }
 }
 
@@ -258,71 +307,96 @@ fn own_entry_text(exe: &Path, icon: Option<&Path>, hidden: bool) -> String {
     s
 }
 
-fn write_own_entry(hidden: bool) -> anyhow::Result<PathBuf> {
+fn write_own_entry(dirs: &Dirs, hidden: bool) -> anyhow::Result<PathBuf> {
     use anyhow::Context;
     let exe = own_exe().context("cannot tell where Yoink is")?;
-    let entry = own_entry_path().context("no home folder")?;
-    let icon = own_icon_path().context("no home folder")?;
-    if let Some(dir) = icon.parent() {
-        std::fs::create_dir_all(dir)?;
-    }
+    let (entry, icon) = own_paths(dirs)?;
     crate::config::write_atomic(&icon, OWN_ICON)?;
-    if let Some(dir) = entry.parent() {
-        std::fs::create_dir_all(dir)?;
-    }
     crate::config::write_atomic(&entry, own_entry_text(&exe, Some(&icon), hidden).as_bytes())?;
+    delete_strays(dirs, &entry);
     Ok(entry)
 }
 
 /// Puts Yoink in the applications menu (with its icon), pointed at where it
-/// runs from.
-pub fn install_own_entry() -> anyhow::Result<PathBuf> {
-    if let OwnEntry::System(path) = own_entry() {
+/// runs from, in the Desktop entries and Icons folders set in Options.
+pub fn install_own_entry(dirs: &Dirs) -> anyhow::Result<PathBuf> {
+    if let OwnEntry::System(path) = own_entry(dirs) {
         anyhow::bail!("{} is already installed by a package", path.display());
     }
-    write_own_entry(false)
+    write_own_entry(dirs, false)
 }
 
-/// Takes Yoink out of the applications menu: deletes the entry and icon it
-/// wrote (never a package's).
-pub fn remove_own_entry() -> anyhow::Result<()> {
-    match own_entry() {
+/// Takes Yoink out of the applications menu: deletes the entries and icons
+/// it wrote (never a package's).
+pub fn remove_own_entry(dirs: &Dirs) -> anyhow::Result<()> {
+    match own_entry(dirs) {
         OwnEntry::System(path) => {
             anyhow::bail!("{} was installed by a package, not by Yoink", path.display())
         }
         OwnEntry::Missing => Ok(()),
         OwnEntry::Shown(path) | OwnEntry::Hidden(path) => {
             std::fs::remove_file(&path)?;
-            if let Some(icon) = own_icon_path() {
+            if let Ok((_, icon)) = own_paths(dirs) {
                 let _ = std::fs::remove_file(icon);
             }
+            delete_strays(dirs, &path);
             Ok(())
         }
     }
 }
 
+/// When the Desktop entries or Icons folder changes: an entry Yoink wrote
+/// for itself moves to the new folders.
+pub fn relocate_own_entry(old: &Dirs, new: &Dirs) -> anyhow::Result<()> {
+    let path = match own_entry(old) {
+        OwnEntry::Shown(p) | OwnEntry::Hidden(p) => p,
+        _ => return Ok(()),
+    };
+    let new_paths = own_paths(new)?;
+    if own_paths(old).ok().as_ref() == Some(&new_paths) {
+        return Ok(());
+    }
+    let text = std::fs::read_to_string(&path).unwrap_or_default();
+    let hidden = field(&text, "NoDisplay").as_deref() == Some("true");
+    write_own_entry(new, hidden)?;
+    if path != new_paths.0 {
+        delete_own(&path);
+    }
+    // An icon left in the old Icons folder (the entry may have named
+    // another one).
+    if let Ok((_, old_icon)) = own_paths(old) {
+        if old_icon != new_paths.1 {
+            let _ = std::fs::remove_file(old_icon);
+        }
+    }
+    Ok(())
+}
+
 /// At start: an entry Yoink wrote is pointed at where Yoink now runs from
-/// (it moved) and gets its icon back if it is gone or old, and on
-/// Wayland, where the compositor shows the
-/// icon of the entry matching the window's app id, a hidden one is written
-/// when there is none.
-fn refresh_own_entry(on_wayland: bool) {
-    let result = match own_entry() {
+/// (it moved), moved to the folders set in Options (they changed, or an
+/// older Yoink wrote it to `~/.local/share`), and gets its icon back if it
+/// is gone or old; and on Wayland, where the compositor shows the icon of
+/// the entry matching the window's app id, a hidden one is written when
+/// there is none.
+fn refresh_own_entry(dirs: &Dirs, on_wayland: bool) {
+    let result = match own_entry(dirs) {
         OwnEntry::Shown(path) | OwnEntry::Hidden(path) => {
             let text = std::fs::read_to_string(&path).unwrap_or_default();
             let hidden = field(&text, "NoDisplay").as_deref() == Some("true");
-            let icon = own_icon_path();
-            let icon_ok = icon
-                .as_deref()
-                .is_some_and(|p| std::fs::read(p).is_ok_and(|b| b == OWN_ICON));
-            match own_exe() {
-                Some(exe) if !icon_ok || text != own_entry_text(&exe, icon.as_deref(), hidden) => {
-                    write_own_entry(hidden).map(drop)
+            match (own_exe(), own_paths(dirs)) {
+                (Some(exe), Ok((entry, icon))) => {
+                    let icon_ok = std::fs::read(&icon).is_ok_and(|b| b == OWN_ICON);
+                    let strays = entry_candidates(dirs).iter().any(|p| *p != entry && is_own(p));
+                    if path != entry || strays || !icon_ok || text != own_entry_text(&exe, Some(&icon), hidden) {
+                        write_own_entry(dirs, hidden).map(drop)
+                    } else {
+                        Ok(())
+                    }
                 }
                 _ => Ok(()),
             }
         }
-        OwnEntry::Missing if on_wayland => write_own_entry(true).map(drop),
+        OwnEntry::Missing if on_wayland => write_own_entry(dirs, true).map(drop),
         _ => Ok(()),
     };
     if let Err(e) = result {
@@ -378,6 +452,19 @@ mod tests {
         let hidden = own_entry_text(Path::new("/y"), None, true);
         assert_eq!(field(&hidden, "Icon").as_deref(), Some("yoink"));
         assert_eq!(field(&hidden, "NoDisplay").as_deref(), Some("true"));
+    }
+
+    #[test]
+    fn own_entry_goes_to_the_folders_set() {
+        let mut dirs = Dirs::default();
+        dirs.desktop = "/custom/apps".into();
+        dirs.icons = "/custom/icons".into();
+        let (entry, icon) = own_paths(&dirs).unwrap();
+        assert_eq!(entry, Path::new("/custom/apps/yoink.desktop"));
+        assert_eq!(icon, Path::new("/custom/icons/yoink.svg"));
+        assert_eq!(entry_candidates(&dirs)[0], entry);
+        dirs.desktop.clear();
+        assert!(own_paths(&dirs).is_err());
     }
 
     #[test]
