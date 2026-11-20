@@ -97,6 +97,15 @@ struct PickState {
     ready: Vec<Task>,
 }
 
+/// The orders the list can be sorted in: the setting's value, the label.
+const SORTS: &[(&str, &str)] = &[
+    ("added", "Date added"),
+    ("name", "Name"),
+    ("updated", "Last updated"),
+    ("updates", "Updates first"),
+    ("repo", "Repository"),
+];
+
 pub struct App {
     ui: slint::Weak<MainWindow>,
     settings: Settings,
@@ -108,6 +117,8 @@ pub struct App {
     token_warning: Option<String>,
     status: HashMap<(String, String), DepState>,
     rows: Rc<VecModel<AppRow>>,
+    /// The library index of each row, in the order the list is sorted.
+    order: Vec<usize>,
     icons: HashMap<String, (PathBuf, Image)>,
     editor: Option<EditorState>,
     pending: Option<Pending>,
@@ -123,7 +134,7 @@ pub struct App {
 
 pub fn run() -> anyhow::Result<()> {
     let settings = Settings::load();
-    crate::desktop::select_backend(settings.native_wayland);
+    crate::desktop::select_backend(settings.native_wayland, &settings.dirs);
     let ui = MainWindow::new()?;
     crate::icons::install(&ui);
     plan::clear_staging();
@@ -142,6 +153,7 @@ pub fn run() -> anyhow::Result<()> {
         token_warning: None,
         status: HashMap::new(),
         rows: Rc::new(VecModel::default()),
+        order: Vec::new(),
         icons: HashMap::new(),
         editor: None,
         pending: None,
@@ -192,17 +204,25 @@ fn connect(ui: &MainWindow) {
     on!(apps, on_add, |a| a.open_editor(None));
     on!(apps, on_check_all, |a| a.check_all());
     on!(apps, on_update_all, |a| a.update_all());
-    on!(apps, on_update, |a, i: i32| a.update_app(i as usize, false));
-    on!(apps, on_force, |a, i: i32| a.update_app(i as usize, true));
+    // The list's callbacks give a row; the library is indexed by app.
+    on!(apps, on_update, |a, i: i32| a.update_app(a.lib_index(i), false));
+    on!(apps, on_force, |a, i: i32| a.update_app(a.lib_index(i), true));
     on!(apps, on_check, |a, i: i32| {
-        if let Some(id) = a.library.apps.get(i as usize).map(|x| x.id.clone()) {
+        if let Some(id) = a.library.apps.get(a.lib_index(i)).map(|x| x.id.clone()) {
             a.check_app(&id);
         }
     });
-    on!(apps, on_edit, |a, i: i32| a.open_editor(Some(i as usize)));
-    on!(apps, on_remove, |a, i: i32| a.ask_remove(i as usize));
+    on!(apps, on_edit, |a, i: i32| a.open_editor(Some(a.lib_index(i))));
+    on!(apps, on_remove, |a, i: i32| a.ask_remove(a.lib_index(i)));
+    on!(apps, on_set_sort, |a, i: i32| a.set_sort(i));
+    on!(apps, on_set_sort_reversed, |a, v: bool| {
+        a.settings.sort_reversed = v;
+        a.save_settings();
+        a.sync_sort();
+        a.refresh_rows();
+    });
     on!(apps, on_open_page, |a, i: i32| {
-        if let Some(app) = a.library.apps.get(i as usize) {
+        if let Some(app) = a.library.apps.get(a.lib_index(i)) {
             open_url(&app.source.web_url());
         }
     });
@@ -388,6 +408,10 @@ impl App {
             .unwrap_or(0);
         ui.global::<Theme>().set_index(theme as i32);
         ui.set_hover_opens(self.settings.hover_opens);
+        ui.global::<Apps>().set_sort_names(ModelRc::new(VecModel::from(
+            SORTS.iter().map(|s| SharedString::from(s.1)).collect::<Vec<_>>(),
+        )));
+        self.sync_sort();
         self.refresh_rows();
         self.sync_prefs();
     }
@@ -449,14 +473,7 @@ impl App {
         // The same rule as Update all: something newer upstream, or not
         // installed yet (an error since does not hide it, so it can be
         // retried).
-        let updatable = app.deployments.iter().any(|d| {
-            d.installed.is_none()
-                || self
-                    .status
-                    .get(&(app.id.clone(), d.id.clone()))
-                    .and_then(|s| s.remote.as_ref())
-                    .is_some_and(|r| d.installed.as_ref().is_some_and(|i| i.key != r.key))
-        });
+        let updatable = self.is_updatable(&app);
         let icon = self.icon_for(&app);
         AppRow {
             id: app.id.clone().into(),
@@ -477,8 +494,85 @@ impl App {
         }
     }
 
+    /// The same rule as Update all: something newer upstream, or not
+    /// installed yet.
+    fn is_updatable(&self, app: &crate::library::App) -> bool {
+        app.deployments.iter().any(|d| {
+            d.installed.is_none()
+                || self
+                    .status
+                    .get(&(app.id.clone(), d.id.clone()))
+                    .and_then(|s| s.remote.as_ref())
+                    .is_some_and(|r| d.installed.as_ref().is_some_and(|i| i.key != r.key))
+        })
+    }
+
+    /// The library indexes in the order the list shows them.
+    fn sorted_order(&self) -> Vec<usize> {
+        use std::cmp::Ordering as O;
+        let apps = &self.library.apps;
+        let name = |i: usize| apps[i].name.to_lowercase();
+        let when = |i: usize| {
+            apps[i]
+                .deployments
+                .iter()
+                .filter_map(|d| d.installed.as_ref().map(|x| x.when))
+                .max()
+                .unwrap_or(0)
+        };
+        let mut order: Vec<usize> = (0..apps.len()).collect();
+        let by_name = |a: usize, b: usize| name(a).cmp(&name(b)).then(a.cmp(&b));
+        let cmp: Box<dyn Fn(usize, usize) -> O> = match self.settings.sort.as_str() {
+            "name" => Box::new(by_name),
+            // Newest first.
+            "updated" => Box::new(move |a, b| when(b).cmp(&when(a)).then_with(|| by_name(a, b))),
+            "updates" => Box::new(move |a, b| {
+                self.is_updatable(&apps[b])
+                    .cmp(&self.is_updatable(&apps[a]))
+                    .then_with(|| by_name(a, b))
+            }),
+            "repo" => Box::new(move |a, b| {
+                apps[a]
+                    .source
+                    .label()
+                    .to_lowercase()
+                    .cmp(&apps[b].source.label().to_lowercase())
+                    .then_with(|| by_name(a, b))
+            }),
+            // The order they were added in.
+            _ => Box::new(|a: usize, b: usize| a.cmp(&b)),
+        };
+        order.sort_by(|&a, &b| cmp(a, b));
+        if self.settings.sort_reversed {
+            order.reverse();
+        }
+        order
+    }
+
+    /// The library index of a row of the list.
+    fn lib_index(&self, row: i32) -> usize {
+        self.order.get(row as usize).copied().unwrap_or(usize::MAX)
+    }
+
+    fn sync_sort(&self) {
+        let ui = self.ui();
+        let apps = ui.global::<Apps>();
+        let i = SORTS.iter().position(|s| s.0 == self.settings.sort).unwrap_or(0);
+        apps.set_sort(i as i32);
+        apps.set_sort_reversed(self.settings.sort_reversed);
+    }
+
+    fn set_sort(&mut self, i: i32) {
+        let Some(s) = SORTS.get(i as usize) else { return };
+        self.settings.sort = s.0.to_string();
+        self.save_settings();
+        self.sync_sort();
+        self.refresh_rows();
+    }
+
     fn refresh_rows(&mut self) {
-        let rows: Vec<AppRow> = (0..self.library.apps.len()).map(|i| self.app_row(i)).collect();
+        self.order = self.sorted_order();
+        let rows: Vec<AppRow> = self.order.clone().into_iter().map(|i| self.app_row(i)).collect();
         self.rows.set_vec(rows);
         self.refresh_summary();
         self.sync_self();
@@ -488,11 +582,16 @@ impl App {
         let Some(i) = self.library.apps.iter().position(|a| a.id == id) else {
             return;
         };
-        let row = self.app_row(i);
-        if i < self.rows.row_count() {
-            self.rows.set_row_data(i, row);
-        } else {
+        // A change that moves the app (its update came, a check found
+        // one) redraws the list in the new order.
+        if self.sorted_order() != self.order {
             self.refresh_rows();
+            return;
+        }
+        let row = self.app_row(i);
+        match self.order.iter().position(|&x| x == i) {
+            Some(r) if r < self.rows.row_count() => self.rows.set_row_data(r, row),
+            _ => self.refresh_rows(),
         }
         self.refresh_summary();
     }
@@ -1851,12 +1950,13 @@ impl App {
         p.set_allow_failed(self.settings.allow_failed_runs);
         p.set_hover_opens(self.settings.hover_opens);
         p.set_native_wayland(self.settings.native_wayland);
+        p.set_app_subdirs(self.settings.dirs.app_subdirs);
         p.set_version(version_label().into());
         self.sync_self();
-        let (in_menu, menu_status, menu_locked) = match crate::desktop::own_entry() {
+        let (in_menu, menu_status, menu_locked) = match crate::desktop::own_entry(&self.settings.dirs) {
             crate::desktop::OwnEntry::Shown(path) => (true, format!("In the menu: {}", tilde(&path)), false),
             crate::desktop::OwnEntry::System(path) => (true, format!("Installed by a package: {}", tilde(&path)), true),
-            _ => (false, "Adds a desktop entry and icon to your home folder.".to_string(), false),
+            _ => (false, "Adds a desktop entry and icon to your Desktop entries and Icons folders.".to_string(), false),
         };
         p.set_in_menu(in_menu);
         p.set_menu_status(menu_status.into());
@@ -1876,8 +1976,14 @@ impl App {
         if self.settings.dirs.get(id) == path {
             return;
         }
+        let old = self.settings.dirs.clone();
         self.settings.dirs.set(id, path);
         self.save_settings();
+        if matches!(id, "desktop" | "icons") {
+            if let Err(e) = crate::desktop::relocate_own_entry(&old, &self.settings.dirs) {
+                self.toast(&format!("Could not move Yoink's desktop entry: {e:#}"), true);
+            }
+        }
         self.sync_prefs();
     }
 
@@ -1937,6 +2043,7 @@ impl App {
                 self.ui().set_hover_opens(v);
             }
             "native-wayland" => self.settings.native_wayland = v,
+            "app-subdirs" => self.settings.dirs.app_subdirs = v,
             _ => return,
         }
         self.save_settings();
@@ -1945,9 +2052,9 @@ impl App {
 
     fn set_in_menu(&mut self, v: bool) {
         let result = if v {
-            crate::desktop::install_own_entry().map(drop)
+            crate::desktop::install_own_entry(&self.settings.dirs).map(drop)
         } else {
-            crate::desktop::remove_own_entry()
+            crate::desktop::remove_own_entry(&self.settings.dirs)
         };
         match result {
             Ok(()) if v => self.toast("Yoink is in the applications menu", false),
