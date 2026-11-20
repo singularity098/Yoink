@@ -1,0 +1,58 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- The horseshoe magnet pulling a package up, from assets/yoink-icon.svg
+     (scaled by 0.36 into the 66dp safe zone and centred in the 108dp adaptive-icon canvas). -->
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:aapt="http://schemas.android.com/aapt"
+    android:width="108dp"
+    android:height="108dp"
+    android:viewportWidth="108"
+    android:viewportHeight="108">
+    <group android:translateX="8" android:translateY="5" android:scaleX="0.36" android:scaleY="0.36">
+        <path
+            android:pathData="M 88 124 L 88 96 A 40 40 0 0 1 168 96 L 168 124"
+            android:strokeWidth="14"
+            android:strokeLineCap="round"
+            android:strokeLineJoin="round">
+            <aapt:attr name="android:strokeColor">
+                <gradient android:type="linear" android:startX="40" android:startY="40" android:endX="216" android:endY="216">
+                    <item android:offset="0" android:color="#FF7278FE" />
+                    <item android:offset="0.55" android:color="#FFC688D6" />
+                    <item android:offset="1" android:color="#FFA85EEA" />
+                </gradient>
+            </aapt:attr>
+        </path>
+        <path
+            android:pathData="M 108 146 L 108 156 M 128 144 L 128 160 M 148 146 L 148 156"
+            android:strokeWidth="8"
+            android:strokeLineCap="round">
+            <aapt:attr name="android:strokeColor">
+                <gradient android:type="linear" android:startX="40" android:startY="40" android:endX="216" android:endY="216">
+                    <item android:offset="0" android:color="#FF7278FE" />
+                    <item android:offset="0.55" android:color="#FFC688D6" />
+                    <item android:offset="1" android:color="#FFA85EEA" />
+                </gradient>
+            </aapt:attr>
+        </path>
+        <path
+            android:pathData="M 104 172 L 152 172 A 6 6 0 0 1 158 178 L 158 210 A 6 6 0 0 1 152 216 L 104 216 A 6 6 0 0 1 98 210 L 98 178 A 6 6 0 0 1 104 172 Z"
+            android:strokeWidth="14"
+            android:strokeLineJoin="round">
+            <aapt:attr name="android:strokeColor">
+                <gradient android:type="linear" android:startX="40" android:startY="40" android:endX="216" android:endY="216">
+                    <item android:offset="0" android:color="#FF7278FE" />
+                    <item android:offset="0.55" android:color="#FFC688D6" />
+                    <item android:offset="1" android:color="#FFA85EEA" />
+                </gradient>
+            </aapt:attr>
+        </path>
+        <path android:pathData="M 79 112 L 97 112 A 3 3 0 0 1 100 115 L 100 129 A 3 3 0 0 1 97 132 L 79 132 A 3 3 0 0 1 76 129 L 76 115 A 3 3 0 0 1 79 112 Z M 159 112 L 177 112 A 3 3 0 0 1 180 115 L 180 129 A 3 3 0 0 1 177 132 L 159 132 A 3 3 0 0 1 156 129 L 156 115 A 3 3 0 0 1 159 112 Z">
+            <aapt:attr name="android:fillColor">
+                <gradient android:type="linear" android:startX="40" android:startY="40" android:endX="216" android:endY="216">
+                    <item android:offset="0" android:color="#FF7278FE" />
+                    <item android:offset="0.55" android:color="#FFC688D6" />
+                    <item android:offset="1" android:color="#FFA85EEA" />
+                </gradient>
+            </aapt:attr>
+        </path>
+    </group>
+</vector>

@@ -89,6 +89,57 @@ repository offers and which build a pattern resolves to, without
 downloading anything. `yoink --inspect FILE` shows what Yoink finds inside
 a package.
 
+## Android
+
+`android/` holds Yoink for Android phones: a smaller Yoink (Kotlin and
+Jetpack Compose, in the same look and themes) that only deals in APKs, and
+installs them itself instead of saving them for syncing.
+
+* **Add** an app by its repository, from Releases (or pre-releases) or
+  Actions builds, as on the desktop. Yoink picks the APK for the phone's
+  processor (`arm64-v8a`, `armeabi-v7a`, `x86_64`…, or a universal one)
+  and makes a pattern of its name. Actions builds come zipped: the APK is
+  taken out of the zip, and an APK inside a zipped release is too.
+* **Check for updates** (the refresh button, or pull down), **Update**,
+  **Update all**, **Force update** (reinstall). Each shows what it will
+  download first, checks the SHA-256 when the release publishes one, then
+  hands the APK to Android's package installer. Android asks to confirm
+  the first install; updates of apps Yoink installed go through without
+  asking on Android 12 and newer. Android refuses an APK signed with
+  another key than the installed app, or an older version.
+* **Remove** an app: uninstall it (Android asks), or only stop managing it.
+* **Options**: the GitHub token (encrypted with a key in the Android
+  Keystore), allowing failed Actions runs, the *Install unknown apps*
+  permission Yoink needs, and the theme.
+* **Yoink updating itself**: add `singularity098/Yoink` and pick
+  `Yoink-android.apk` (Releases, or the Actions artifact for dev builds).
+
+Needs Android 8 or newer. Split APK bundles (`.apks`, `.xapk`) are not
+supported.
+
+### Building
+
+```bash
+cd android
+./gradlew assembleRelease     # app/build/outputs/apk/release/app-release.apk
+./gradlew testDebugUnitTest
+```
+
+Needs JDK 17 or newer and the Android SDK (platform 36), found through
+`ANDROID_HOME` or `local.properties`. A release build is signed with the
+keystore named by `YOINK_KEYSTORE` (with `YOINK_KEYSTORE_PASSWORD`,
+`YOINK_KEY_ALIAS` and `YOINK_KEY_PASSWORD`), or with the debug key.
+
+CI builds `Yoink-android.apk` on every push. To sign every build with one
+key, so each installs as an update of the last, add the repository secrets
+`ANDROID_KEYSTORE_BASE64` (the keystore, `base64 -w0 yoink.jks`),
+`ANDROID_KEYSTORE_PASSWORD`, `ANDROID_KEY_ALIAS` and `ANDROID_KEY_PASSWORD`.
+Make the keystore once, and keep it safe:
+
+```bash
+keytool -genkeypair -keystore yoink.jks -alias yoink -keyalg RSA -keysize 4096 -validity 10000
+```
+
 ## Licence
 
 GPL-3.0-or-later. The look, the icons and the Jost font (SIL Open Font
