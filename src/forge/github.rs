@@ -275,7 +275,15 @@ impl GitHub {
         for run in &runs {
             let running = run.status != "completed";
             let conclusion = run.conclusion.as_deref().unwrap_or("");
-            if !running && conclusion != "success" && !(allow_failed && conclusion == "failure") {
+            // A cancelled run (one job stuck or unable to start, say) still
+            // offers the artifacts its finished jobs uploaded: an artifact
+            // is only uploaded once its job's build and tests are through.
+            let cancelled = conclusion == "cancelled";
+            if !running
+                && conclusion != "success"
+                && !cancelled
+                && !(allow_failed && conclusion == "failure")
+            {
                 if conclusion == "failure" && skipped_failed.is_none() {
                     skipped_failed = Some(run);
                 }
@@ -306,6 +314,12 @@ impl GitHub {
             }
             if conclusion == "failure" {
                 notes.push(format!("run #{} failed", run.run_number));
+            }
+            if cancelled {
+                notes.push(format!(
+                    "run #{} was cancelled (this file is finished)",
+                    run.run_number
+                ));
             }
             let _ = &run.name;
             return Ok(Remote {
@@ -355,26 +369,74 @@ impl GitHub {
         let url = self.api(&format!("/git/trees/{}?recursive=1", enc(branch)));
         let tree: TreeJson = http::get_json(&url, &self.auth)?;
         let repo = self.repo.to_ascii_lowercase();
-        let mut best: Option<(i32, &TreeEntry)> = None;
-        for e in &tree.tree {
-            if e.kind != "blob" || e.size.unwrap_or(0) > 600_000 {
-                continue;
-            }
-            if let Some(score) = icon_score(&e.path, &repo) {
-                if best.as_ref().is_none_or(|(s, _)| score > *s) {
-                    best = Some((score, e));
+        let mut cands: Vec<(i32, &TreeEntry)> = tree
+            .tree
+            .iter()
+            .filter(|e| e.kind == "blob" && e.size.unwrap_or(0) <= 600_000)
+            .filter_map(|e| icon_score(&e.path, &repo).map(|s| (s, e)))
+            .collect();
+        // Best first; the shorter path between equals (the plainer name).
+        cands.sort_by(|a, b| b.0.cmp(&a.0).then(a.1.path.len().cmp(&b.1.path.len())));
+        // A logo with the name written beside it (a wide banner) makes a poor
+        // icon: of the likeliest few, the first that is about square wins,
+        // else the likeliest of them.
+        let mut fallback: Option<Icon> = None;
+        for (_, e) in cands.iter().take(5) {
+            let url = self.api(&format!("/contents/{}?ref={}", enc_path(&e.path), enc(branch)));
+            let bytes = match http::get_bytes(&url, "application/vnd.github.raw", &self.auth, 1_000_000) {
+                Ok(b) => b,
+                Err(err) => {
+                    log::info!("icon candidate {} not fetched: {err:#}", e.path);
+                    continue;
                 }
+            };
+            let Some(ext) = image_ext(&bytes) else { continue };
+            let squarish = image_aspect(&bytes).is_none_or(|r| r <= 1.3);
+            let icon = Icon {
+                bytes,
+                ext,
+                source: IconSource::Repo,
+            };
+            if squarish {
+                return Ok(Some(icon));
             }
+            fallback.get_or_insert(icon);
         }
-        let Some((_, e)) = best else { return Ok(None) };
-        let url = self.api(&format!("/contents/{}?ref={}", enc_path(&e.path), enc(branch)));
-        let bytes = http::get_bytes(&url, "application/vnd.github.raw", &self.auth, 1_000_000)?;
-        Ok(image_ext(&bytes).map(|ext| Icon {
-            bytes,
-            ext,
-            source: IconSource::Repo,
-        }))
+        Ok(fallback)
     }
+}
+
+/// How far an image is from square: its longer side over its shorter
+/// (None: not known). PNGs by their header, SVGs by their `viewBox` (or
+/// `width` and `height`).
+fn image_aspect(bytes: &[u8]) -> Option<f64> {
+    let (w, h) = if bytes.starts_with(b"\x89PNG\r\n\x1a\n") && bytes.len() >= 24 {
+        let n = |i: usize| u32::from_be_bytes([bytes[i], bytes[i + 1], bytes[i + 2], bytes[i + 3]]) as f64;
+        (n(16), n(20))
+    } else {
+        let text = String::from_utf8_lossy(&bytes[..bytes.len().min(4096)]);
+        let start = text.find("<svg")?;
+        let tag = &text[start..start + text[start..].find('>')?];
+        let attr = |name: &str| -> Option<&str> {
+            let at = tag.find(&format!(" {name}="))? + name.len() + 2;
+            let quote = tag[at..].chars().next()?;
+            let rest = &tag[at + 1..];
+            Some(&rest[..rest.find(quote)?])
+        };
+        let num = |v: &str| v.trim().trim_end_matches("px").parse::<f64>().ok();
+        match attr("viewBox") {
+            Some(vb) => {
+                let v: Vec<f64> = vb
+                    .split(|c: char| c == ',' || c.is_whitespace())
+                    .filter(|p| !p.is_empty())
+                    .filter_map(|p| p.parse().ok())
+                    .collect();
+                (*v.get(2)?, *v.get(3)?)
+            }
+            None => (num(attr("width")?)?, num(attr("height")?)?),
+        }
+    };
+    (w > 0.0 && h > 0.0).then(|| w.max(h) / w.min(h))
 }
 
 /// How likely a repository file is to be the app's icon (None: not one).
@@ -394,9 +456,11 @@ fn icon_score(path: &str, repo: &str) -> Option<i32> {
         return None;
     }
     let mut score = ext_score;
-    let named = if stem == repo || stem == format!("{repo}-icon") || stem == format!("{repo}_icon") {
+    let named = if stem == format!("{repo}-icon") || stem == format!("{repo}_icon") {
+        65
+    } else if stem == repo {
         60
-    } else if stem.contains("icon") || stem.contains("logo") {
+    } else if ["icon", "logo", "mark", "symbol"].iter().any(|w| stem.contains(w)) {
         40
     } else if stem.contains(repo) && repo.len() >= 3 {
         25
@@ -568,6 +632,19 @@ impl Forge for GitHub {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn aspects() {
+        let svg = br#"<svg xmlns="http://www.w3.org/2000/svg" viewBox="-10 -10 579 152">"#;
+        assert!((image_aspect(svg).unwrap() - 579.0 / 152.0).abs() < 1e-9);
+        let sq = br#"<?xml version="1.0"?><svg width="64px" height='64'>"#;
+        assert_eq!(image_aspect(sq), Some(1.0));
+        let mut png = b"\x89PNG\r\n\x1a\n\0\0\0\x0dIHDR".to_vec();
+        png.extend(1219u32.to_be_bytes());
+        png.extend(320u32.to_be_bytes());
+        assert!(image_aspect(&png).unwrap() > 3.0);
+        assert_eq!(image_aspect(b"<svg>"), None);
+    }
 
     #[test]
     fn icon_scores() {

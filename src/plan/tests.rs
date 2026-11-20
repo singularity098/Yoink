@@ -63,6 +63,7 @@ fn app(kind: Kind) -> (App, Deployment) {
         source: Source::parse("o/tool").unwrap(),
         icon: None,
         icon_source: IconSource::None,
+        icon_auto: false,
         description: String::new(),
         deployments: vec![dep.clone()],
     };

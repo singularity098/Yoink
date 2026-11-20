@@ -80,6 +80,7 @@ struct EditorState {
     /// A new icon to save with the app.
     icon: Option<(Vec<u8>, String, IconSource)>,
     fetch_serial: u64,
+    icon_serial: u64,
 }
 
 struct Pending {
@@ -278,6 +279,7 @@ fn connect(ui: &MainWindow) {
         a.editor_show_dep();
     });
     on!(e, on_choose_icon, |a| a.editor_choose_icon());
+    on!(e, on_repo_icon, |a| a.editor_repo_icon());
     on!(e, on_save, |a| a.editor_save());
     on!(e, on_cancel, |a| a.close_editor());
 
@@ -745,8 +747,20 @@ impl App {
                     .map_err(|e| short(&e));
                 results.push((d.id.clone(), r));
             }
+            let icon = if app.icon_auto && app.icon_source != IconSource::Custom {
+                forge
+                    .icon()
+                    .map_err(|e| log::info!("{}: icon not fetched: {e:#}", app.name))
+                    .ok()
+                    .flatten()
+            } else {
+                None
+            };
             post(move |a| {
                 a.checking = a.checking.saturating_sub(1);
+                if let Some(icon) = icon {
+                    a.follow_icon(&app.id, icon);
+                }
                 for (dep, r) in results {
                     let st = a.status.entry((app.id.clone(), dep)).or_default();
                     st.checking = false;
@@ -764,6 +778,31 @@ impl App {
                 a.refresh_app(&app.id);
             });
         });
+    }
+
+    /// Puts a freshly fetched repository icon in place for an app that
+    /// follows the repository's, when it differs from the one it has.
+    fn follow_icon(&mut self, id: &str, icon: forge::Icon) {
+        let Some(app) = self.library.app_mut(id) else { return };
+        if !app.icon_auto || app.icon_source == IconSource::Custom {
+            return;
+        }
+        let same = app
+            .icon_path()
+            .and_then(|p| std::fs::read(p).ok())
+            .is_some_and(|old| old == icon.bytes);
+        if same && app.icon_source == icon.source {
+            return;
+        }
+        match save_icon(&app.id, app.icon.as_deref(), &icon.bytes, icon.ext) {
+            Ok(file) => {
+                app.icon = Some(file);
+                app.icon_source = icon.source;
+                self.icons.remove(id);
+                self.save_library();
+            }
+            Err(e) => log::warn!("could not save the icon: {e:#}"),
+        }
     }
 
     // ------------------------------------------------------------ updating
@@ -1134,7 +1173,7 @@ impl App {
                     ok += 1;
                     // The package's own icon is better than an avatar.
                     if let Some((bytes, ext, source)) = &t.icon {
-                        if app.icon_source != IconSource::Custom {
+                        if app.icon_source != IconSource::Custom && !app.icon_auto {
                             if let Ok(file) = save_icon(&app.id, app.icon.as_deref(), bytes, ext) {
                                 app.icon = Some(file);
                                 app.icon_source = *source;
@@ -1375,6 +1414,7 @@ impl App {
                 selected: 0,
                 icon: None,
                 fetch_serial: 0,
+                icon_serial: 0,
             },
             None => EditorState {
                 app: LibApp {
@@ -1386,6 +1426,7 @@ impl App {
                     },
                     icon: None,
                     icon_source: IconSource::None,
+                    icon_auto: false,
                     description: String::new(),
                     deployments: Vec::new(),
                 },
@@ -1395,6 +1436,7 @@ impl App {
                 selected: 0,
                 icon: None,
                 fetch_serial: 0,
+                icon_serial: 0,
             },
         };
         e.set_editing(state.editing);
@@ -1404,6 +1446,8 @@ impl App {
         e.set_busy(false);
         e.set_fetched(state.editing);
         e.set_name(state.app.name.clone().into());
+        e.set_icon_auto(state.app.icon_auto);
+        e.set_icon_loading(false);
         self.editor = Some(state);
         self.editor_show_icon();
         self.editor_show_deps();
@@ -1440,6 +1484,17 @@ impl App {
             None => ed.app.icon_path().and_then(|p| Image::load_from_path(&p).ok()),
         };
         let img = img.map(|i| crate::icons::smooth(i, self.icon_px()));
+        let source = ed.icon.as_ref().map(|(_, _, s)| *s).unwrap_or(ed.app.icon_source);
+        e.set_icon_from(
+            match (img.is_some(), source) {
+                (false, _) | (true, IconSource::None) => "No icon yet",
+                (true, IconSource::Avatar) => "The owner's avatar (the repository has no icon Yoink recognised)",
+                (true, IconSource::Repo) => "From the repository",
+                (true, IconSource::AppImage) => "From inside the AppImage",
+                (true, IconSource::Custom) => "Your own image",
+            }
+            .into(),
+        );
         e.set_has_icon(img.is_some());
         e.set_icon(img.unwrap_or_default());
         let name = e.get_name();
@@ -1898,8 +1953,45 @@ impl App {
                 };
                 if let Some(ed) = &mut a.editor {
                     ed.icon = Some((bytes, ext.to_string(), IconSource::Custom));
+                    // Never replaced: following the repository makes no sense.
+                    ed.icon_serial += 1;
                 }
+                let ui = a.ui();
+                let e = ui.global::<Editor>();
+                e.set_icon_auto(false);
+                e.set_icon_loading(false);
                 a.editor_show_icon();
+            });
+        });
+    }
+
+    /// Fetches the repository's icon (or the owner's avatar) again for the
+    /// app being edited.
+    fn editor_repo_icon(&mut self) {
+        let Some(ed) = &mut self.editor else { return };
+        let source = ed.app.source.clone();
+        ed.icon_serial += 1;
+        let serial = ed.icon_serial;
+        self.ui().global::<Editor>().set_icon_loading(true);
+        let token = self.token.clone();
+        std::thread::spawn(move || {
+            let icon = forge::forge(&source, token).icon().map_err(|e| short(&e));
+            post(move |a| {
+                let Some(ed) = &mut a.editor else { return };
+                if ed.icon_serial != serial {
+                    return;
+                }
+                a.ui().global::<Editor>().set_icon_loading(false);
+                match icon {
+                    Ok(Some(icon)) => {
+                        if let Some(ed) = &mut a.editor {
+                            ed.icon = Some((icon.bytes, icon.ext.to_string(), icon.source));
+                        }
+                        a.editor_show_icon();
+                    }
+                    Ok(None) => a.toast("The repository has no icon, and its owner no avatar", false),
+                    Err(e) => a.toast(&format!("Could not fetch the icon: {e}"), true),
+                }
             });
         });
     }
@@ -1927,6 +2019,7 @@ impl App {
         }
         let editing = ed.editing;
         let icon = ed.icon.clone();
+        app.icon_auto = self.ui().global::<Editor>().get_icon_auto();
         if !editing {
             app.id = self.library.new_id(&app.source);
         }

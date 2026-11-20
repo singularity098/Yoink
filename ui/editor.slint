@@ -58,6 +58,13 @@ export global Editor {
     callback set-kind(int);
     callback forget-inner();
     callback choose-icon();
+    // Fetch the repository's icon again, now.
+    callback repo-icon();
+    // Keep the icon in step with the repository at every check.
+    in-out property <bool> icon-auto;
+    in property <bool> icon-loading;
+    // Where the icon shown came from, in words.
+    in property <string> icon-from;
     callback save();
     callback cancel();
 }
@@ -201,6 +208,37 @@ export component EditorDialog inherits Rectangle {
                         text <=> Editor.name;
                         placeholder: "Name";
                         clearable: false;
+                    }
+                    Rectangle { height: 4px; }
+                    Label { text: "ICON"; }
+                    if Editor.icon-from != "": Text {
+                        text: Editor.icon-from;
+                        color: Theme.text-faint;
+                        font-size: Theme.font-small;
+                        wrap: word-wrap;
+                    }
+                    HorizontalLayout {
+                        spacing: 8px;
+                        BigButton {
+                            text: "Choose…";
+                            tip: "Use an image of your own (PNG, JPEG or SVG); it is never replaced";
+                            clicked => { Editor.choose-icon(); }
+                        }
+                        BigButton {
+                            text: Editor.icon-loading ? "Fetching…" : "From repo";
+                            enabled: !Editor.icon-loading;
+                            tip: "Fetch the repository's icon again (or the owner's avatar when it has none)";
+                            clicked => { Editor.repo-icon(); }
+                        }
+                    }
+                    SettingRow {
+                        label: "Follow the repo";
+                        detail: "Update the icon when the repository's changes";
+                        Toggle {
+                            checked: Editor.icon-auto;
+                            tip: "At every check for updates, fetch the repository's icon and use it if it changed";
+                            toggled(v) => { Editor.icon-auto = v; }
+                        }
                     }
                     Rectangle { height: 4px; }
                     Label { text: "DEPLOYMENTS"; }
