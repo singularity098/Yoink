@@ -33,9 +33,16 @@ file that will be downloaded, copied, replaced, kept and deleted. Only
   default one). Yoink takes the newest run that has your file: if a run is
   still in progress but your file is already uploaded (the Linux build done
   while Windows is still compiling), it uses it; if not, it uses the run
-  before and tells you a newer build is coming. Runs that failed are skipped
-  unless you allow them in Options. GitHub only lets Actions builds be
+  before and tells you a newer build is coming. A cancelled run (one job
+  stuck, say) still offers the files its finished jobs uploaded. Runs that
+  failed are skipped unless you allow them in Options. GitHub only lets Actions builds be
   downloaded with a token.
+* **The icon**: Yoink looks in the repository for an icon (preferring a
+  square one to a logo with the name written beside it), else uses the
+  owner's avatar; an AppImage's own icon replaces it at the first update.
+  In the app's edit dialog, *Choose…* uses an image of your own (never
+  replaced), *From repo* fetches the repository's again, and *Follow the
+  repo* keeps it in step with the repository's at every check.
 * **Check for updates** (F5), **Update all**, **Update** one app, or
   **Force update** (reinstall) from its ⋮ menu.
 * **Sort** the list (the *Sort* button, right of the toolbar): by date

@@ -231,6 +231,10 @@ pub struct App {
     pub icon: Option<String>,
     #[serde(default)]
     pub icon_source: IconSource,
+    /// Keep the icon in step with the repository's: fetched again at every
+    /// check and replaced when it changed (never a custom one).
+    #[serde(default)]
+    pub icon_auto: bool,
     #[serde(default)]
     pub description: String,
     pub deployments: Vec<Deployment>,
@@ -407,6 +411,7 @@ mod tests {
                 source: Source::parse("a/b").unwrap(),
                 icon: None,
                 icon_source: IconSource::None,
+                icon_auto: false,
                 description: String::new(),
                 deployments: vec![d],
             }],
