@@ -52,6 +52,19 @@ file that will be downloaded, copied, replaced, kept and deleted. Only
   moves, and moved along if you change those folders); turning it off
   removes them. From a terminal: `yoink --install-desktop`
   and `yoink --remove-desktop`. An entry a package installed is left alone.
+* **Desktop entries in a synced folder** (KDE Plasma): desktops only look
+  for apps in `~/.local/share/applications` and the system's folders. Set
+  the desktop entries folder to an `applications` folder anywhere (say
+  `~/Sync/Yoink/applications`) and turn on Options → Folders → *Show these
+  desktop entries in KDE Plasma*: Yoink writes
+  `~/.config/plasma-workspace/env/yoink.sh`, which Plasma runs at login, to
+  put the folder above it (`~/Sync/Yoink`) in front of `XDG_DATA_DIRS`.
+  It takes effect from the next login. The script belongs to this computer
+  and is not synced with the settings, so Yoink always looks at the script
+  itself to tell whether it is there: turn it on once on each computer.
+  When the desktop entries folder changes (here, or in synced settings),
+  a script Yoink wrote is pointed at the new one. From a terminal:
+  `yoink --plasma-status`, `--install-plasma-env`, `--remove-plasma-env`.
 
 Yoink records every file each deployment puts in place, so updates and
 removals delete exactly those, and a file that Yoink did not put there (or
