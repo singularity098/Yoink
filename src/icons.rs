@@ -40,6 +40,84 @@ fn draw(line: SharedString, solid: SharedString, weight: f32, grid: f32) -> Imag
     image
 }
 
+/// An app's icon made ready to be shown `px` physical pixels wide: a raster
+/// icon larger than that (an AppImage's 512 px `.DirIcon`) is scaled down
+/// here, averaging every source pixel. The renderers sample images without
+/// mipmaps, so drawing a large one small skips most of its pixels and comes
+/// out jagged. SVGs are left alone: Slint renders them at the size shown.
+pub fn smooth(image: Image, px: u32) -> Image {
+    let px = px.max(1);
+    let size = image.size();
+    if size.width <= px && size.height <= px {
+        return image;
+    }
+    // Vector images have no pixels to give.
+    let Some(buf) = image.to_rgba8_premultiplied() else {
+        return image;
+    };
+    let (w, h) = (buf.width() as usize, buf.height() as usize);
+    if w == 0 || h == 0 {
+        return image;
+    }
+    let scale = px as f64 / w.max(h) as f64;
+    let nw = ((w as f64 * scale).round() as usize).max(1);
+    let nh = ((h as f64 * scale).round() as usize).max(1);
+    let src = buf.as_bytes();
+    let out = downscale(src, w, h, nw, nh);
+    let mut dst = slint::SharedPixelBuffer::<slint::Rgba8Pixel>::new(nw as u32, nh as u32);
+    dst.make_mut_bytes().copy_from_slice(&out);
+    Image::from_rgba8(dst)
+}
+
+/// Area-averaging downscale of premultiplied RGBA (`w`×`h` to `nw`×`nh`,
+/// each no larger), returned un-premultiplied.
+fn downscale(src: &[u8], w: usize, h: usize, nw: usize, nh: usize) -> Vec<u8> {
+    // How much of each source column (row) falls in each target column (row).
+    fn spans(n: usize, nn: usize) -> Vec<Vec<(usize, f64)>> {
+        let ratio = n as f64 / nn as f64;
+        (0..nn)
+            .map(|i| {
+                let (a, b) = (i as f64 * ratio, (i + 1) as f64 * ratio);
+                let mut v = Vec::new();
+                let mut s = a.floor() as usize;
+                while (s as f64) < b && s < n {
+                    let cover = (b.min((s + 1) as f64) - a.max(s as f64)).max(0.0);
+                    if cover > 0.0 {
+                        v.push((s, cover / ratio));
+                    }
+                    s += 1;
+                }
+                v
+            })
+            .collect()
+    }
+    let xs = spans(w, nw);
+    let ys = spans(h, nh);
+    let mut out = vec![0u8; nw * nh * 4];
+    for (ty, yspan) in ys.iter().enumerate() {
+        for (tx, xspan) in xs.iter().enumerate() {
+            let mut acc = [0f64; 4];
+            for &(sy, wy) in yspan {
+                for &(sx, wx) in xspan {
+                    let i = (sy * w + sx) * 4;
+                    let k = wx * wy;
+                    for c in 0..4 {
+                        acc[c] += src[i + c] as f64 * k;
+                    }
+                }
+            }
+            let o = (ty * nw + tx) * 4;
+            let a = acc[3];
+            for c in 0..3 {
+                let v = if a > 0.0 { acc[c] * 255.0 / a } else { 0.0 };
+                out[o + c] = v.round().clamp(0.0, 255.0) as u8;
+            }
+            out[o + 3] = a.round().clamp(0.0, 255.0) as u8;
+        }
+    }
+    out
+}
+
 /// An SVG document `grid` units square: `solid` filled (even-odd) and `line`
 /// stroked `weight` wide with round ends, both white so `colorize` can tint
 /// them.
@@ -89,6 +167,26 @@ mod tests {
     fn empty_paths_are_left_out() {
         assert_eq!(svg("", "", 2.0, 14.0).matches("<path").count(), 0);
         assert_eq!(svg("M 1 1", "", 1.4, 14.0).matches("<path").count(), 1);
+    }
+
+    #[test]
+    fn downscale_averages() {
+        // 2×2 → 1×1: two opaque white pixels and two transparent ones give
+        // half-transparent white (premultiplied in, straight out).
+        let src = [255, 255, 255, 255, 0, 0, 0, 0, 0, 0, 0, 0, 255, 255, 255, 255];
+        assert_eq!(downscale(&src, 2, 2, 1, 1), vec![255, 255, 255, 128]);
+        // 3 → 2 columns: the middle pixel is shared.
+        let src = [0, 0, 0, 255, 90, 90, 90, 255, 180, 180, 180, 255];
+        assert_eq!(downscale(&src, 3, 1, 2, 1), vec![30, 30, 30, 255, 150, 150, 150, 255]);
+    }
+
+    #[test]
+    fn smooth_shrinks_large_rasters_only() {
+        let big = Image::from_rgba8(slint::SharedPixelBuffer::new(512, 256));
+        let s = smooth(big, 48).size();
+        assert_eq!((s.width, s.height), (48, 24));
+        let small = Image::from_rgba8(slint::SharedPixelBuffer::new(32, 32));
+        assert_eq!(smooth(small, 48).size().width, 32);
     }
 
     #[test]

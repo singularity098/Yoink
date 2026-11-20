@@ -398,7 +398,12 @@ fn yoink_reinstalls_over_itself() {
     let rows = t.rows();
     assert!(rows.iter().any(|r| r.verb == "Note" && r.text.contains("this is Yoink itself")));
     assert!(!rows.iter().any(|r| r.tone == 8), "no warnings: {rows:?}");
-    assert_eq!(t.new_files, vec![exe.clone()], "no desktop entry of its own");
+    // Its desktop entry follows the deployment's setting, like any app's:
+    // Yoink's own entry and icon, pointed at where it was delivered.
+    let entry = h.join("applications/yoink.desktop");
+    let icon = h.join("icons/yoink.svg");
+    assert_eq!(t.new_files, vec![exe.clone(), icon.clone(), entry.clone()]);
+    assert_eq!(t.exe.as_ref(), Some(&exe), "what a restart runs");
     let mut running = std::fs::File::open(&exe).unwrap();
     let (_, res) = apply(&t, &stops(&env));
     res.unwrap();
@@ -407,7 +412,68 @@ fn yoink_reinstalls_over_itself() {
     let mut old = String::new();
     running.read_to_string(&mut old).unwrap();
     assert_eq!(old, "old yoink");
-    assert!(!h.join("applications").exists());
+    let text = std::fs::read_to_string(&entry).unwrap();
+    assert!(text.contains(&format!("Exec={}\n", exe.display())), "{text}");
+    assert!(text.contains(&format!("Icon={}\n", icon.display())), "{text}");
+    assert!(text.contains("StartupWMClass=yoink\n"), "{text}");
+    assert_eq!(std::fs::read(&icon).unwrap(), crate::desktop::own_icon());
+}
+
+#[test]
+fn yoink_replaces_the_entry_it_wrote_for_itself() {
+    let env = env();
+    let lib = Library::default();
+    let ctx = PlanContext {
+        dirs: &env.dirs,
+        library: &lib,
+    };
+    let h = env.root.join("home");
+    // The entry and icon an older Yoink wrote from its Options switch.
+    let entry = h.join("applications/yoink.desktop");
+    let icon = h.join("icons/yoink.svg");
+    write(&entry, b"[Desktop Entry]\nName=Yoink\nExec=/old/yoink\nX-Yoink-Self=true\n", 0o644);
+    write(&icon, b"<svg/>", 0o644);
+    let (mut app, mut dep) = app(Kind::Binary);
+    app.source = Source::parse("singularity098/yoink").unwrap();
+    dep.desktop = true;
+    let dir = env.root.join("staging/yoink");
+    let file = dir.join("download/yoink-x86_64-linux");
+    write(&file, &elf(true), 0o644);
+    let s = Staged {
+        contents: Contents::default(),
+        dir,
+        file,
+        ftype: FileType::Elf,
+        verified: None,
+        unpacked: None,
+    };
+    let t = ready(build(&ctx, &app, &dep, &remote("yoink-x86_64-linux", "v2"), &s).unwrap());
+    let rows = t.rows();
+    assert!(!rows.iter().any(|r| r.tone == 8 || r.detail.contains("did not install")), "{rows:?}");
+    assert!(t.new_files.contains(&entry) && t.new_files.contains(&icon));
+}
+
+#[test]
+fn yoink_restarts_into_its_binary_not_the_kept_zip() {
+    let env = env();
+    let lib = Library::default();
+    let ctx = PlanContext {
+        dirs: &env.dirs,
+        library: &lib,
+    };
+    let (mut app, mut dep) = app(Kind::Binary);
+    app.source = Source::parse("singularity098/yoink").unwrap();
+    dep.desktop = false;
+    // An Actions build: the binary inside a zip, which is kept.
+    let s = staged(&env, "yoink-x86_64-linux.zip", &[("yoink-x86_64-linux", elf(true), 0o644)]);
+    let t = ready(build(&ctx, &app, &dep, &remote("yoink-x86_64-linux.zip", "v2"), &s).unwrap());
+    let exe = env.dirs.path("bin").unwrap().join("yoink");
+    assert!(t.new_files[0].ends_with("yoink-x86_64-linux.zip"), "{:?}", t.new_files);
+    assert_eq!(t.exe.as_ref(), Some(&exe));
+    let (_, res) = apply(&t, &stops(&env));
+    res.unwrap();
+    let mode = std::fs::metadata(&exe).unwrap().permissions().mode();
+    assert_eq!(mode & 0o111, 0o111, "executable");
 }
 
 #[test]
@@ -437,7 +503,10 @@ fn yoink_updates_itself_as_a_binary() {
     let rows = t.rows();
     assert!(rows.iter().any(|r| r.verb == "Note" && r.text.contains("this is Yoink itself")));
     let exe = env.dirs.path("bin").unwrap().join("yoink");
-    assert_eq!(t.new_files, vec![exe.clone()], "installed as `yoink`, no desktop entry of its own");
+    let entry = env.dirs.path("desktop").unwrap().join("yoink.desktop");
+    let icon = env.dirs.path("icons").unwrap().join("yoink.svg");
+    assert_eq!(t.new_files, vec![exe.clone(), icon, entry], "installed as `yoink`, with its desktop entry");
+    assert_eq!(t.exe.as_ref(), Some(&exe));
     let (_, res) = apply(&t, &stops(&env));
     res.unwrap();
     assert_eq!(std::fs::read(&exe).unwrap(), bin);

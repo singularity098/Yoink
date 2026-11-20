@@ -133,6 +133,9 @@ pub struct Settings {
     /// The order of the app list: added, name, updated, updates, repo.
     pub sort: String,
     pub sort_reversed: bool,
+    /// The fingerprint of the token whose (read-only) access warning was
+    /// dismissed; another token warns again.
+    pub token_warning_dismissed: String,
 }
 
 impl Default for Settings {
@@ -149,6 +152,7 @@ impl Default for Settings {
             maximized: false,
             sort: "added".into(),
             sort_reversed: false,
+            token_warning_dismissed: String::new(),
         }
     }
 }

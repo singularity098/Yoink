@@ -1,6 +1,6 @@
 //! Desktop entries: reading a field, pointing an AppImage's own entry at
 //! where it was delivered, and writing one for an app that has none. Also
-//! Yoink's own place on the desktop: its window system and desktop entry.
+//! Yoink's window system, and the hidden entry that gives its window an icon on Wayland.
 
 use crate::config::Dirs;
 use std::path::{Path, PathBuf};
@@ -317,59 +317,41 @@ fn write_own_entry(dirs: &Dirs, hidden: bool) -> anyhow::Result<PathBuf> {
     Ok(entry)
 }
 
-/// Puts Yoink in the applications menu (with its icon), pointed at where it
-/// runs from, in the Desktop entries and Icons folders set in Options.
-pub fn install_own_entry(dirs: &Dirs) -> anyhow::Result<PathBuf> {
-    if let OwnEntry::System(path) = own_entry(dirs) {
-        anyhow::bail!("{} is already installed by a package", path.display());
-    }
-    write_own_entry(dirs, false)
-}
-
-/// Takes Yoink out of the applications menu: deletes the entries and icons
-/// it wrote (never a package's).
-pub fn remove_own_entry(dirs: &Dirs) -> anyhow::Result<()> {
-    match own_entry(dirs) {
-        OwnEntry::System(path) => {
-            anyhow::bail!("{} was installed by a package, not by Yoink", path.display())
+/// An entry Yoink wrote for itself in the applications menu (from the
+/// option older versions had) and nothing asks for any more: Yoink's entry
+/// now comes from its own deployment's desktop setting, like any app's.
+/// Deletes it, and the icon beside it, unless `wanted` (the deployment
+/// will write `yoink.desktop` over it at its next update). A hidden one,
+/// written only so a Wayland compositor finds the icon, stays.
+pub fn retire_menu_entry(dirs: &Dirs, wanted: bool) {
+    if let OwnEntry::Shown(path) = own_entry(dirs) {
+        if wanted && own_paths(dirs).is_ok_and(|(entry, _)| entry == path) {
+            return;
         }
-        OwnEntry::Missing => Ok(()),
-        OwnEntry::Shown(path) | OwnEntry::Hidden(path) => {
-            std::fs::remove_file(&path)?;
-            if let Ok((_, icon)) = own_paths(dirs) {
-                let _ = std::fs::remove_file(icon);
-            }
-            delete_strays(dirs, &path);
-            Ok(())
-        }
-    }
-}
-
-/// When the Desktop entries or Icons folder changes: an entry Yoink wrote
-/// for itself moves to the new folders.
-pub fn relocate_own_entry(old: &Dirs, new: &Dirs) -> anyhow::Result<()> {
-    let path = match own_entry(old) {
-        OwnEntry::Shown(p) | OwnEntry::Hidden(p) => p,
-        _ => return Ok(()),
-    };
-    let new_paths = own_paths(new)?;
-    if own_paths(old).ok().as_ref() == Some(&new_paths) {
-        return Ok(());
-    }
-    let text = std::fs::read_to_string(&path).unwrap_or_default();
-    let hidden = field(&text, "NoDisplay").as_deref() == Some("true");
-    write_own_entry(new, hidden)?;
-    if path != new_paths.0 {
+        log::info!("removing the desktop entry Yoink wrote for itself: {}", path.display());
         delete_own(&path);
     }
-    // An icon left in the old Icons folder (the entry may have named
-    // another one).
-    if let Ok((_, old_icon)) = own_paths(old) {
-        if old_icon != new_paths.1 {
-            let _ = std::fs::remove_file(old_icon);
-        }
+}
+
+/// Whether `path` is an entry Yoink wrote for itself, or the icon beside
+/// it: an update of Yoink's own deployment replaces them as its own.
+pub fn is_own_file(dirs: &Dirs, path: &Path) -> bool {
+    let Ok((entry, icon)) = own_paths(dirs) else { return false };
+    if path == entry {
+        is_own(path)
+    } else {
+        path == icon && is_own(&entry)
     }
-    Ok(())
+}
+
+/// The entry Yoink ships (and its icon), for its own deployment's desktop
+/// entry: named after the window's app id, so the taskbar matches them.
+pub fn own_template() -> (String, String) {
+    (OWN_ENTRY_NAME.to_string(), include_str!("../packaging/yoink.desktop").to_string())
+}
+
+pub fn own_icon() -> &'static [u8] {
+    OWN_ICON
 }
 
 /// At start: an entry Yoink wrote is pointed at where Yoink now runs from
