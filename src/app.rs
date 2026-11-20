@@ -230,6 +230,7 @@ fn connect(ui: &MainWindow) {
     on!(p, on_set_flag, |a, id: SharedString, v: bool| a.set_flag(&id, v));
     on!(p, on_add_self, |a| a.add_self());
     on!(p, on_set_in_menu, |a, v: bool| a.set_in_menu(v));
+    on!(p, on_set_plasma, |a, v: bool| a.set_plasma(v));
 
     let e = ui.global::<Editor>();
     on!(e, on_fetch, |a| a.editor_fetch());
@@ -388,6 +389,11 @@ impl App {
             .unwrap_or(0);
         ui.global::<Theme>().set_index(theme as i32);
         ui.set_hover_opens(self.settings.hover_opens);
+        // The synced settings may name another desktop entries folder than
+        // this computer's Plasma script adds.
+        if let Err(e) = crate::plasma::follow(&self.settings.dirs) {
+            log::warn!("could not update the Plasma script: {e:#}");
+        }
         self.refresh_rows();
         self.sync_prefs();
     }
@@ -1861,6 +1867,10 @@ impl App {
         p.set_in_menu(in_menu);
         p.set_menu_status(menu_status.into());
         p.set_menu_locked(menu_locked);
+        let plasma = crate::plasma::state(&self.settings.dirs);
+        p.set_plasma_on(plasma.present());
+        p.set_plasma_enabled(plasma.present() || matches!(plasma, crate::plasma::State::Missing(_)));
+        p.set_plasma_status(plasma.describe().into());
         p.set_config_path(tilde(&config::config_dir().join("settings.toml")).into());
     }
 
@@ -1878,6 +1888,13 @@ impl App {
         }
         self.settings.dirs.set(id, path);
         self.save_settings();
+        if id == "desktop" {
+            match crate::plasma::follow(&self.settings.dirs) {
+                Ok(Some(_)) => self.toast("Plasma will look in the new folder from the next login", false),
+                Ok(None) => {}
+                Err(e) => self.toast(&format!("Could not update the Plasma script: {e:#}"), true),
+            }
+        }
         self.sync_prefs();
     }
 
@@ -1953,6 +1970,20 @@ impl App {
             Ok(()) if v => self.toast("Yoink is in the applications menu", false),
             Ok(()) => self.toast("Yoink is out of the applications menu", false),
             Err(e) => self.toast(&format!("Could not change the desktop entry: {e:#}"), true),
+        }
+        self.sync_prefs();
+    }
+
+    fn set_plasma(&mut self, v: bool) {
+        let result = if v {
+            crate::plasma::install(&self.settings.dirs).map(drop)
+        } else {
+            crate::plasma::remove()
+        };
+        match result {
+            Ok(()) if v => self.toast("Plasma will show these entries from the next login", false),
+            Ok(()) => self.toast("Plasma script removed: takes effect at the next login", false),
+            Err(e) => self.toast(&format!("Could not change the Plasma script: {e:#}"), true),
         }
         self.sync_prefs();
     }

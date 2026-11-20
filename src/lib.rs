@@ -13,6 +13,7 @@ mod icons;
 pub mod library;
 pub mod pattern;
 pub mod plan;
+pub mod plasma;
 pub mod secret;
 
 slint::include_modules!();

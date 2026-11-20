@@ -40,6 +40,12 @@ export global Prefs {
     in property <bool> menu-locked;
     in property <string> menu-status;
     callback set-in-menu(bool);
+    // KDE Plasma told at login to look in the desktop entries folder (a
+    // script on this computer, read from the disk, never from settings).
+    in property <bool> plasma-on;
+    in property <bool> plasma-enabled;
+    in property <string> plasma-status;
+    callback set-plasma(bool);
 }
 
 component Card inherits Rectangle {
@@ -219,6 +225,15 @@ export component OptionsPanel inherits Rectangle {
                     for d in Prefs.dirs: DirLine {
                         entry: d;
                         interacted => { root.interacted(); }
+                    }
+                    SettingRow {
+                        label: "Show these desktop entries in KDE Plasma";
+                        detail: Prefs.plasma-status;
+                        Toggle {
+                            checked: Prefs.plasma-on;
+                            enabled: Prefs.plasma-enabled;
+                            toggled(v) => { root.interacted(); Prefs.set-plasma(v); }
+                        }
                     }
                 }
 
