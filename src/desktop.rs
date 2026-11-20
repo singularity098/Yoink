@@ -233,12 +233,21 @@ pub fn own_entry() -> OwnEntry {
     }
 }
 
-/// Yoink's entry pointed at `exe`, hidden from the menu if asked.
-fn own_entry_text(exe: &Path, hidden: bool) -> String {
+/// Yoink's icon, as written next to its entry.
+const OWN_ICON: &[u8] = include_bytes!("../assets/yoink-icon.svg");
+
+/// Yoink's entry pointed at `exe` and at its icon file, hidden from the menu
+/// if asked. The icon is named by its full path, not by theme name: a
+/// theme lookup misses it while the user's hicolor folder has a stale icon
+/// cache, which leaves the menu entry and the taskbar (which takes the icon
+/// from the entry matching the window) blank.
+fn own_entry_text(exe: &Path, icon: Option<&Path>, hidden: bool) -> String {
     let mut s = String::new();
     for line in include_str!("../packaging/yoink.desktop").lines() {
         if line.starts_with("Exec=") {
             s += &format!("Exec={}\nTryExec={}\n", quote(exe), exe.display());
+        } else if let (true, Some(icon)) = (line.starts_with("Icon="), icon) {
+            s += &format!("Icon={}\n", icon.display());
         } else {
             s += line;
             s.push('\n');
@@ -259,11 +268,11 @@ fn write_own_entry(hidden: bool) -> anyhow::Result<PathBuf> {
     if let Some(dir) = icon.parent() {
         std::fs::create_dir_all(dir)?;
     }
-    crate::config::write_atomic(&icon, include_bytes!("../assets/yoink-icon.svg"))?;
+    crate::config::write_atomic(&icon, OWN_ICON)?;
     if let Some(dir) = entry.parent() {
         std::fs::create_dir_all(dir)?;
     }
-    crate::config::write_atomic(&entry, own_entry_text(&exe, hidden).as_bytes())?;
+    crate::config::write_atomic(&entry, own_entry_text(&exe, Some(&icon), hidden).as_bytes())?;
     Ok(entry)
 }
 
@@ -295,7 +304,8 @@ pub fn remove_own_entry() -> anyhow::Result<()> {
 }
 
 /// At start: an entry Yoink wrote is pointed at where Yoink now runs from
-/// (the AppImage moved), and on Wayland, where the compositor shows the
+/// (the AppImage moved) and gets its icon back if it is gone or old, and on
+/// Wayland, where the compositor shows the
 /// icon of the entry matching the window's app id, a hidden one is written
 /// when there is none.
 fn refresh_own_entry(on_wayland: bool) {
@@ -303,8 +313,14 @@ fn refresh_own_entry(on_wayland: bool) {
         OwnEntry::Shown(path) | OwnEntry::Hidden(path) => {
             let text = std::fs::read_to_string(&path).unwrap_or_default();
             let hidden = field(&text, "NoDisplay").as_deref() == Some("true");
+            let icon = own_icon_path();
+            let icon_ok = icon
+                .as_deref()
+                .is_some_and(|p| std::fs::read(p).is_ok_and(|b| b == OWN_ICON));
             match own_exe() {
-                Some(exe) if text != own_entry_text(&exe, hidden) => write_own_entry(hidden).map(drop),
+                Some(exe) if !icon_ok || text != own_entry_text(&exe, icon.as_deref(), hidden) => {
+                    write_own_entry(hidden).map(drop)
+                }
                 _ => Ok(()),
             }
         }
@@ -353,12 +369,24 @@ mod tests {
 
     #[test]
     fn own_entry_is_marked() {
-        let shown = own_entry_text(Path::new("/a b/Yoink.AppImage"), false);
+        let icon = Path::new("/h/.local/share/icons/hicolor/scalable/apps/yoink.svg");
+        let shown = own_entry_text(Path::new("/a b/Yoink.AppImage"), Some(icon), false);
         assert!(shown.contains("Exec=\"/a b/Yoink.AppImage\"\n"), "{shown}");
         assert!(shown.contains("TryExec=/a b/Yoink.AppImage\n"));
         assert_eq!(field(&shown, SELF_MARK).as_deref(), Some("true"));
+        assert_eq!(field(&shown, "Icon").as_deref(), Some(icon.to_str().unwrap()));
+        assert_eq!(shown.matches("Icon=").count(), 1);
         assert_eq!(field(&shown, "NoDisplay"), None);
-        let hidden = own_entry_text(Path::new("/y"), true);
+        let hidden = own_entry_text(Path::new("/y"), None, true);
+        assert_eq!(field(&hidden, "Icon").as_deref(), Some("yoink"));
         assert_eq!(field(&hidden, "NoDisplay").as_deref(), Some("true"));
+    }
+
+    #[test]
+    fn own_icon_renders() {
+        // The window icon is rendered from this SVG; one Slint cannot read
+        // leaves the taskbar blank on X11.
+        let img = slint::Image::load_from_svg_data(OWN_ICON).expect("icon SVG parses");
+        assert_eq!((img.size().width, img.size().height), (256, 256));
     }
 }
