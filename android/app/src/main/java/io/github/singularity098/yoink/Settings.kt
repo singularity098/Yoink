@@ -19,7 +19,7 @@ class Settings(context: Context) {
     private val prefs = context.getSharedPreferences("settings", Context.MODE_PRIVATE)
 
     var theme: Int
-        get() = prefs.getInt("theme", 0)
+        get() = prefs.getInt("theme", 2)
         set(v) = prefs.edit().putInt("theme", v).apply()
 
     /** Take Actions builds from failed runs too. */

@@ -2,7 +2,7 @@
 // (installed and newest version, status) and its buttons.
 import { Theme } from "theme.slint";
 import { BigButton, IconButton, MenuItem, Tip } from "widgets.slint";
-import { Icon, Icons, MoreIcons } from "icons.slint";
+import { Icon, Icons, MoreIcons, Logo } from "icons.slint";
 import { AppRow, DepRow } from "types.slint";
 import { ScrollView } from "std-widgets.slint";
 
@@ -294,14 +294,10 @@ export component AppList inherits Rectangle {
     if Apps.rows.length == 0: VerticalLayout {
         alignment: center;
         spacing: 14px;
-        Icon {
+        Logo {
             x: (parent.width - self.width) / 2;
-            width: 72px;
-            height: 72px;
-            line: MoreIcons.logo-line;
-            solid: MoreIcons.logo-solid;
-            weight: 1.2;
-            tint: Theme.paint;
+            width: 96px;
+            height: 96px;
         }
         Text {
             text: "Nothing yoinked yet";

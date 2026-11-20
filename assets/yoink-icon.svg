@@ -1,21 +1,32 @@
 <svg xmlns="http://www.w3.org/2000/svg" width="256" height="256" viewBox="0 0 256 256">
+  <!-- A prize claw lifting a crate, drawn as "Detail A" of a blueprint.
+       Inside the app these four colours are swapped for the theme's
+       (src/icons.rs, `logo_svg`): #0b2a4a paper, #2a5a8c grid,
+       #7fb2ff line work, #e8f1ff ink. Keep them distinct. -->
   <defs>
-    <linearGradient id="paint" gradientUnits="userSpaceOnUse" x1="40" y1="40" x2="216" y2="216">
-      <stop offset="0" stop-color="#7278fe"/>
-      <stop offset="0.55" stop-color="#c688d6"/>
-      <stop offset="1" stop-color="#a85eea"/>
-    </linearGradient>
+    <pattern id="grid" width="14" height="14" patternUnits="userSpaceOnUse">
+      <path d="M 14 0 H 0 V 14" fill="none" stroke="#2a5a8c" stroke-width="1"/>
+    </pattern>
+    <clipPath id="disc"><circle cx="128" cy="128" r="112"/></clipPath>
   </defs>
-  <rect x="8" y="8" width="240" height="240" rx="56" fill="#15151a"/>
-  <rect x="8.5" y="8.5" width="239" height="239" rx="55.5" fill="none" stroke="#ffffff29"/>
-  <!-- A horseshoe magnet pulling a package up. -->
-  <g fill="none" stroke="url(#paint)" stroke-width="14" stroke-linecap="round" stroke-linejoin="round">
-    <path d="M 88 124 L 88 96 A 40 40 0 0 1 168 96 L 168 124"/>
-    <path d="M 108 146 L 108 156 M 128 144 L 128 160 M 148 146 L 148 156" stroke-width="8"/>
-    <rect x="98" y="172" width="60" height="44" rx="6"/>
+  <circle cx="128" cy="128" r="112" fill="#0b2a4a"/>
+  <rect width="256" height="256" fill="url(#grid)" clip-path="url(#disc)"/>
+  <g transform="translate(128 132) scale(1.12) translate(-128 -116)">
+    <g fill="none" stroke="#e8f1ff" stroke-width="5.5" stroke-linecap="round" stroke-linejoin="round">
+      <path d="M 128 18 V 86"/>
+      <rect x="104" y="128" width="48" height="44" rx="2" fill="#e8f1ff" fill-opacity="0.12"/>
+      <path d="M 128 128 V 172" stroke-width="2.75" stroke-dasharray="4 4"/>
+      <rect x="98" y="86" width="60" height="24" rx="5" fill="#0b2a4a"/>
+      <path d="M 110 110 Q 84 134 97 160 L 108 160"/>
+      <path d="M 146 110 Q 172 134 159 160 L 148 160"/>
+    </g>
+    <g fill="#0b2a4a" stroke="#e8f1ff" stroke-width="3.3">
+      <circle cx="110" cy="110" r="4.5"/>
+      <circle cx="146" cy="110" r="4.5"/>
+    </g>
   </g>
-  <g fill="url(#paint)">
-    <rect x="76" y="112" width="24" height="20" rx="3"/>
-    <rect x="156" y="112" width="24" height="20" rx="3"/>
-  </g>
+  <circle cx="128" cy="128" r="112" fill="none" stroke="#7fb2ff" stroke-width="5"/>
+  <circle cx="128" cy="128" r="122" fill="none" stroke="#7fb2ff" stroke-width="2" stroke-dasharray="6 6"/>
+  <rect x="186" y="200" width="44" height="30" rx="4" fill="#0b2a4a" stroke="#7fb2ff" stroke-width="3"/>
+  <path d="M 201 224 L 208 205 L 215 224 M 203.6 217.5 H 212.4" fill="none" stroke="#e8f1ff" stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round"/>
 </svg>

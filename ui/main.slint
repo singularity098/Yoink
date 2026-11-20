@@ -8,7 +8,7 @@ import "../assets/fonts/Jost-Light.ttf";
 import "../assets/fonts/Jost-Regular.ttf";
 import { Theme, ThemeLook } from "theme.slint";
 import { BigButton, IconButton, Tips } from "widgets.slint";
-import { Icon, Icons, MoreIcons, IconArt } from "icons.slint";
+import { Icon, Icons, MoreIcons, IconArt, Logo } from "icons.slint";
 import { TooltipLayer } from "tooltip.slint";
 import { AppRow, DepRow, DirRow, PlanRow, Cand, EdDep, PickOpt } from "types.slint";
 import { Apps, AppList, SortButton } from "applist.slint";
@@ -75,7 +75,7 @@ component TopBar inherits Rectangle {
     callback minimize;
     callback close-window;
     callback open-options;
-    background: #00000066;
+    background: Theme.title-bar;
     Rectangle { y: parent.height - 1px; height: 1px; background: Theme.border; }
     TouchArea {
         property <bool> armed;
@@ -97,14 +97,10 @@ component TopBar inherits Rectangle {
         padding-left: 14px;
         padding-right: 6px;
         spacing: 6px;
-        Icon {
+        Logo {
             y: (parent.height - self.height) / 2;
-            width: 22px;
-            height: 22px;
-            line: MoreIcons.logo-line;
-            solid: MoreIcons.logo-solid;
-            weight: 1.7;
-            tint: Theme.paint;
+            width: 26px;
+            height: 26px;
         }
         Text {
             text: "Yoink";
@@ -183,7 +179,7 @@ component Toolbar inherits HorizontalLayout {
 export component MainWindow inherits Window {
     title: "Yoink";
     no-frame: true;
-    icon: @image-url("../assets/yoink-icon.svg");
+    icon: IconArt.logo(Theme.paint-b, Theme.paint-c, Theme.text);
     background: Theme.bg;
     min-width: 720px;
     min-height: 480px;
@@ -376,5 +372,16 @@ export component MainWindow inherits Window {
         horizontal-tiling: repeat;
         vertical-tiling: repeat;
         accessible-role: none;
+    }
+
+    // A one-pixel line in the theme's paint marks the window's edges against
+    // whatever is behind it (not when maximised: the screen's edges are).
+    if root.framed: Rectangle {
+        x: 0;
+        y: 0;
+        width: root.width;
+        height: root.height;
+        border-width: 1phx;
+        border-color: Theme.paint;
     }
 }

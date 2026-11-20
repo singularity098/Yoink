@@ -4,7 +4,7 @@
 //! proper edge smoothing, which left the icons jagged; images come out
 //! smooth on every renderer.
 
-use slint::{ComponentHandle, Image, SharedString};
+use slint::{Color, ComponentHandle, Image, SharedString};
 use std::cell::RefCell;
 use std::collections::HashMap;
 
@@ -15,10 +15,57 @@ type Key = (SharedString, SharedString, u32, u32);
 thread_local! {
     // Bindings call `draw` often; parse each icon only once.
     static CACHE: RefCell<HashMap<Key, Image>> = RefCell::new(HashMap::new());
+    static LOGOS: RefCell<HashMap<[u32; 3], Image>> = RefCell::new(HashMap::new());
 }
 
 pub fn install(ui: &MainWindow) {
     ui.global::<IconArt>().on_draw(draw);
+    ui.global::<IconArt>().on_logo(logo);
+}
+
+/// The logo as shipped (the desktop entry's icon, the launcher's).
+const LOGO: &str = include_str!("../assets/yoink-icon.svg");
+
+fn logo(line: Color, deep: Color, ink: Color) -> Image {
+    let key = [line, deep, ink].map(|c| u32::from_be_bytes([c.red(), c.green(), c.blue(), c.alpha()]));
+    if let Some(image) = LOGOS.with(|c| c.borrow().get(&key).cloned()) {
+        return image;
+    }
+    let image = Image::load_from_svg_data(logo_svg(rgb(line), rgb(deep), rgb(ink)).as_bytes())
+        .unwrap_or_else(|e| {
+            log::warn!("logo could not be drawn: {e:?}");
+            Image::default()
+        });
+    LOGOS.with(|c| c.borrow_mut().insert(key, image.clone()));
+    image
+}
+
+type Rgb = [u8; 3];
+
+fn rgb(c: Color) -> Rgb {
+    [c.red(), c.green(), c.blue()]
+}
+
+/// `a` over `b`, `t` of the way from `b` to `a`.
+fn mix(a: Rgb, b: Rgb, t: f32) -> Rgb {
+    [0, 1, 2].map(|i| (a[i] as f32 * t + b[i] as f32 * (1.0 - t)).round() as u8)
+}
+
+fn hex(c: Rgb) -> String {
+    format!("#{:02x}{:02x}{:02x}", c[0], c[1], c[2])
+}
+
+/// The logo with its blueprint colours swapped for a theme's: the paper is
+/// `deep` sunk nearly to black, its grid a little lighter, the rings and
+/// badge `line`, the claw `ink` lifted towards white.
+fn logo_svg(line: Rgb, deep: Rgb, ink: Rgb) -> String {
+    let paper = mix(deep, [10, 10, 16], 0.22);
+    let grid = mix(deep, paper, 0.4);
+    let ink = mix(ink, [255, 255, 255], 0.5);
+    LOGO.replace("#0b2a4a", &hex(paper))
+        .replace("#2a5a8c", &hex(grid))
+        .replace("#7fb2ff", &hex(line))
+        .replace("#e8f1ff", &hex(ink))
 }
 
 fn draw(line: SharedString, solid: SharedString, weight: f32, grid: f32) -> Image {
@@ -187,6 +234,17 @@ mod tests {
         assert_eq!((s.width, s.height), (48, 24));
         let small = Image::from_rgba8(slint::SharedPixelBuffer::new(32, 32));
         assert_eq!(smooth(small, 48).size().width, 32);
+    }
+
+    #[test]
+    fn logo_takes_the_theme_colours() {
+        let s = logo_svg([0x2e, 0xc8, 0xe8], [0x3a, 0x7b, 0xff], [255, 255, 255]);
+        for blueprint in ["#0b2a4a", "#2a5a8c", "#7fb2ff", "#e8f1ff"] {
+            assert!(!s.contains(blueprint), "{blueprint} left in");
+        }
+        assert!(s.contains("#2ec8e8") && s.contains("#ffffff"));
+        let image = Image::load_from_svg_data(s.as_bytes()).unwrap();
+        assert_eq!((image.size().width, image.size().height), (256, 256));
     }
 
     #[test]
