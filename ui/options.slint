@@ -3,7 +3,7 @@
 // Changes apply at once and are saved.
 import { Theme } from "theme.slint";
 import { BigButton, Toggle, Chip, SectionTitle, SettingRow, IconButton, TextField } from "widgets.slint";
-import { Icon, Icons, MoreIcons } from "icons.slint";
+import { Icon, Icons, MoreIcons, Logo } from "icons.slint";
 import { DirRow } from "types.slint";
 import { ScrollView } from "std-widgets.slint";
 
@@ -311,14 +311,10 @@ export component OptionsPanel inherits Rectangle {
                 Card {
                     HorizontalLayout {
                         spacing: 10px;
-                        Icon {
+                        Logo {
                             y: (parent.height - self.height) / 2;
-                            width: 28px;
-                            height: 28px;
-                            line: MoreIcons.logo-line;
-                            solid: MoreIcons.logo-solid;
-                            weight: 1.5;
-                            tint: Theme.paint;
+                            width: 32px;
+                            height: 32px;
                         }
                         VerticalLayout {
                             alignment: center;

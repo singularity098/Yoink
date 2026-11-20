@@ -1,58 +1,35 @@
 <?xml version="1.0" encoding="utf-8"?>
-<!-- The horseshoe magnet pulling a package up, from assets/yoink-icon.svg
-     (scaled by 0.36 into the 66dp safe zone and centred in the 108dp adaptive-icon canvas). -->
+<!-- Yoink's launcher icon: a prize claw lifting a crate, drawn as Detail A of a blueprint.
+     Generated from assets/yoink-icon.svg, scaled by 0.27 into the 66dp safe zone of the
+     108dp adaptive-icon canvas. Vector drawables have no patterns or dashes, so the grid
+     and the dashed outer ring are drawn as plain paths. -->
 <vector xmlns:android="http://schemas.android.com/apk/res/android"
-    xmlns:aapt="http://schemas.android.com/aapt"
     android:width="108dp"
     android:height="108dp"
     android:viewportWidth="108"
     android:viewportHeight="108">
-    <group android:translateX="8" android:translateY="5" android:scaleX="0.36" android:scaleY="0.36">
-        <path
-            android:pathData="M 88 124 L 88 96 A 40 40 0 0 1 168 96 L 168 124"
-            android:strokeWidth="14"
-            android:strokeLineCap="round"
-            android:strokeLineJoin="round">
-            <aapt:attr name="android:strokeColor">
-                <gradient android:type="linear" android:startX="40" android:startY="40" android:endX="216" android:endY="216">
-                    <item android:offset="0" android:color="#FF7278FE" />
-                    <item android:offset="0.55" android:color="#FFC688D6" />
-                    <item android:offset="1" android:color="#FFA85EEA" />
-                </gradient>
-            </aapt:attr>
-        </path>
-        <path
-            android:pathData="M 108 146 L 108 156 M 128 144 L 128 160 M 148 146 L 148 156"
-            android:strokeWidth="8"
-            android:strokeLineCap="round">
-            <aapt:attr name="android:strokeColor">
-                <gradient android:type="linear" android:startX="40" android:startY="40" android:endX="216" android:endY="216">
-                    <item android:offset="0" android:color="#FF7278FE" />
-                    <item android:offset="0.55" android:color="#FFC688D6" />
-                    <item android:offset="1" android:color="#FFA85EEA" />
-                </gradient>
-            </aapt:attr>
-        </path>
-        <path
-            android:pathData="M 104 172 L 152 172 A 6 6 0 0 1 158 178 L 158 210 A 6 6 0 0 1 152 216 L 104 216 A 6 6 0 0 1 98 210 L 98 178 A 6 6 0 0 1 104 172 Z"
-            android:strokeWidth="14"
-            android:strokeLineJoin="round">
-            <aapt:attr name="android:strokeColor">
-                <gradient android:type="linear" android:startX="40" android:startY="40" android:endX="216" android:endY="216">
-                    <item android:offset="0" android:color="#FF7278FE" />
-                    <item android:offset="0.55" android:color="#FFC688D6" />
-                    <item android:offset="1" android:color="#FFA85EEA" />
-                </gradient>
-            </aapt:attr>
-        </path>
-        <path android:pathData="M 79 112 L 97 112 A 3 3 0 0 1 100 115 L 100 129 A 3 3 0 0 1 97 132 L 79 132 A 3 3 0 0 1 76 129 L 76 115 A 3 3 0 0 1 79 112 Z M 159 112 L 177 112 A 3 3 0 0 1 180 115 L 180 129 A 3 3 0 0 1 177 132 L 159 132 A 3 3 0 0 1 156 129 L 156 115 A 3 3 0 0 1 159 112 Z">
-            <aapt:attr name="android:fillColor">
-                <gradient android:type="linear" android:startX="40" android:startY="40" android:endX="216" android:endY="216">
-                    <item android:offset="0" android:color="#FF7278FE" />
-                    <item android:offset="0.55" android:color="#FFC688D6" />
-                    <item android:offset="1" android:color="#FFA85EEA" />
-                </gradient>
-            </aapt:attr>
-        </path>
+    <group android:translateX="19.44" android:translateY="19.44" android:scaleX="0.27" android:scaleY="0.27">
+        <path android:pathData="M 16 128 A 112 112 0 1 0 240 128 A 112 112 0 1 0 16 128 Z" android:fillColor="#FF0B2A4A" />
+        <group>
+            <clip-path android:pathData="M 16 128 A 112 112 0 1 0 240 128 A 112 112 0 1 0 16 128 Z" />
+            <path android:pathData="M 14 0 V 256 M 0 14 H 256 M 28 0 V 256 M 0 28 H 256 M 42 0 V 256 M 0 42 H 256 M 56 0 V 256 M 0 56 H 256 M 70 0 V 256 M 0 70 H 256 M 84 0 V 256 M 0 84 H 256 M 98 0 V 256 M 0 98 H 256 M 112 0 V 256 M 0 112 H 256 M 126 0 V 256 M 0 126 H 256 M 140 0 V 256 M 0 140 H 256 M 154 0 V 256 M 0 154 H 256 M 168 0 V 256 M 0 168 H 256 M 182 0 V 256 M 0 182 H 256 M 196 0 V 256 M 0 196 H 256 M 210 0 V 256 M 0 210 H 256 M 224 0 V 256 M 0 224 H 256 M 238 0 V 256 M 0 238 H 256 M 252 0 V 256 M 0 252 H 256" android:strokeColor="#FF2A5A8C" android:strokeWidth="1" />
+        </group>
+        <group android:translateX="128" android:translateY="132" android:scaleX="1.12" android:scaleY="1.12">
+            <group android:translateX="-128" android:translateY="-116">
+                <path android:pathData="M 104 128 H 152 V 172 H 104 Z" android:fillColor="#1FE8F1FF" />
+                <path android:pathData="M 128 18 V 86 M 106 128 H 150 A 2 2 0 0 1 152 130 V 170 A 2 2 0 0 1 150 172 H 106 A 2 2 0 0 1 104 170 V 130 A 2 2 0 0 1 106 128 Z M 110 110 Q 84 134 97 160 L 108 160 M 146 110 Q 172 134 159 160 L 148 160"
+                    android:strokeColor="#FFE8F1FF" android:strokeWidth="5.5" android:strokeLineCap="round" android:strokeLineJoin="round" />
+                <path android:pathData="M 103 86 H 153 A 5 5 0 0 1 158 91 V 105 A 5 5 0 0 1 153 110 H 103 A 5 5 0 0 1 98 105 V 91 A 5 5 0 0 1 103 86 Z"
+                    android:fillColor="#FF0B2A4A"
+                    android:strokeColor="#FFE8F1FF" android:strokeWidth="5.5" />
+                <path android:pathData="M 105.5 110 A 4.5 4.5 0 1 0 114.5 110 A 4.5 4.5 0 1 0 105.5 110 Z M 141.5 110 A 4.5 4.5 0 1 0 150.5 110 A 4.5 4.5 0 1 0 141.5 110 Z"
+                    android:fillColor="#FF0B2A4A"
+                    android:strokeColor="#FFE8F1FF" android:strokeWidth="3.3" />
+            </group>
+        </group>
+        <path android:pathData="M 16 128 A 112 112 0 1 0 240 128 A 112 112 0 1 0 16 128 Z" android:strokeColor="#FF7FB2FF" android:strokeWidth="5" />
+        <path android:pathData="M 250.00 128.00 A 122 122 0 0 1 249.85 134.00 M 249.39 140.15 A 122 122 0 0 1 248.65 146.10 M 247.58 152.17 A 122 122 0 0 1 246.25 158.02 M 244.58 163.96 A 122 122 0 0 1 242.67 169.65 M 240.42 175.39 A 122 122 0 0 1 237.95 180.86 M 235.14 186.35 A 122 122 0 0 1 232.15 191.54 M 228.80 196.73 A 122 122 0 0 1 225.30 201.60 M 221.46 206.42 A 122 122 0 0 1 217.49 210.92 M 213.18 215.34 A 122 122 0 0 1 208.79 219.42 M 204.07 223.38 A 122 122 0 0 1 199.28 227.01 M 194.19 230.48 A 122 122 0 0 1 189.07 233.61 M 183.66 236.56 A 122 122 0 0 1 178.25 239.17 M 172.57 241.57 A 122 122 0 0 1 166.93 243.62 M 161.04 245.44 A 122 122 0 0 1 155.23 246.92 M 149.19 248.15 A 122 122 0 0 1 143.25 249.04 M 137.12 249.66 A 122 122 0 0 1 131.13 249.96 M 124.96 249.96 A 122 122 0 0 1 118.97 249.67 M 112.83 249.05 A 122 122 0 0 1 106.90 248.16 M 100.85 246.94 A 122 122 0 0 1 95.04 245.46 M 89.14 243.65 A 122 122 0 0 1 83.51 241.60 M 77.82 239.20 A 122 122 0 0 1 72.42 236.60 M 67.00 233.66 A 122 122 0 0 1 61.88 230.53 M 56.78 227.06 A 122 122 0 0 1 52.00 223.44 M 47.27 219.47 A 122 122 0 0 1 42.88 215.39 M 38.57 210.98 A 122 122 0 0 1 34.60 206.48 M 30.75 201.66 A 122 122 0 0 1 27.25 196.79 M 23.90 191.62 A 122 122 0 0 1 20.90 186.42 M 18.08 180.93 A 122 122 0 0 1 15.61 175.47 M 13.36 169.73 A 122 122 0 0 1 11.44 164.04 M 9.77 158.10 A 122 122 0 0 1 8.44 152.26 M 7.36 146.18 A 122 122 0 0 1 6.61 140.23 M 6.15 134.08 A 122 122 0 0 1 6.00 128.08 M 6.15 121.92 A 122 122 0 0 1 6.60 115.94 M 7.36 109.82 A 122 122 0 0 1 8.40 103.91 M 9.77 97.90 A 122 122 0 0 1 11.40 92.12 M 13.36 86.27 A 122 122 0 0 1 15.55 80.69 M 18.08 75.07 A 122 122 0 0 1 20.82 69.73 M 23.90 64.38 A 122 122 0 0 1 27.15 59.34 M 30.75 54.34 A 122 122 0 0 1 34.49 49.64 M 38.57 45.02 A 122 122 0 0 1 42.76 40.72 M 47.27 36.53 A 122 122 0 0 1 51.87 32.67 M 56.78 28.94 A 122 122 0 0 1 61.74 25.56 M 67.00 22.34 A 122 122 0 0 1 72.27 19.47 M 77.82 16.80 A 122 122 0 0 1 83.35 14.46 M 89.14 12.35 A 122 122 0 0 1 94.88 10.58 M 100.85 9.06 A 122 122 0 0 1 106.73 7.87 M 112.83 6.95 A 122 122 0 0 1 118.80 6.35 M 124.96 6.04 A 122 122 0 0 1 130.96 6.04 M 137.12 6.34 A 122 122 0 0 1 143.09 6.94 M 149.19 7.85 A 122 122 0 0 1 155.07 9.04 M 161.04 10.56 A 122 122 0 0 1 166.78 12.33 M 172.57 14.43 A 122 122 0 0 1 178.10 16.76 M 183.66 19.44 A 122 122 0 0 1 188.93 22.30 M 194.19 25.52 A 122 122 0 0 1 199.15 28.89 M 204.07 32.62 A 122 122 0 0 1 208.66 36.47 M 213.18 40.66 A 122 122 0 0 1 217.38 44.96 M 221.46 49.58 A 122 122 0 0 1 225.20 54.27 M 228.80 59.27 A 122 122 0 0 1 232.06 64.31 M 235.14 69.65 A 122 122 0 0 1 237.88 74.99 M 240.42 80.61 A 122 122 0 0 1 242.61 86.19 M 244.58 92.04 A 122 122 0 0 1 246.21 97.81 M 247.58 103.83 A 122 122 0 0 1 248.62 109.73 M 249.39 115.85 A 122 122 0 0 1 249.84 121.84" android:strokeColor="#FF7FB2FF" android:strokeWidth="2" />
+        <path android:pathData="M 190 200 H 226 A 4 4 0 0 1 230 204 V 226 A 4 4 0 0 1 226 230 H 190 A 4 4 0 0 1 186 226 V 204 A 4 4 0 0 1 190 200 Z" android:fillColor="#FF0B2A4A" android:strokeColor="#FF7FB2FF" android:strokeWidth="3" />
+        <path android:pathData="M 201 224 L 208 205 L 215 224 M 203.6 217.5 H 212.4" android:strokeColor="#FFE8F1FF" android:strokeWidth="2.6" android:strokeLineCap="round" android:strokeLineJoin="round" />
     </group>
 </vector>

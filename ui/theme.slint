@@ -6,7 +6,7 @@
 // What the window shows in its base state is black at 50%; what slides or
 // pops over it (the file browser, settings, menus) is black at 95%.
 
-// A theme: a fixed look picked by name in Settings. Iris is the default.
+// A theme: a fixed look picked by name in Settings. Abyss is the default.
 // The names are stored in settings.json: never rename one.
 export struct ThemeLook {
     name: string,
@@ -23,8 +23,8 @@ export struct ThemeLook {
 }
 
 export global Theme {
-    // Index into `looks`; set from Rust (Settings.display.theme).
-    in-out property <int> index: 0;
+    // Index into `looks`; set from Rust (Settings.display.theme). 2 is Abyss.
+    in-out property <int> index: 2;
     // Kept from Chippy, where it marks a phone; always false here.
     in property <bool> mobile;
 
@@ -58,6 +58,8 @@ export global Theme {
     // The same, pressed.
     out property <brush> paint-pressed: @linear-gradient(115deg, root.paint-a.darker(25%) 0%, root.paint-b.darker(25%) 55%, root.paint-c.darker(25%) 100%);
     out property <color> on-paint: #000000;
+    // The title bar: the paint, faint enough over the background to stay dark.
+    out property <brush> title-bar: @linear-gradient(90deg, root.paint-a.transparentize(86%) 0%, root.paint-b.transparentize(86%) 55%, root.paint-c.transparentize(86%) 100%);
     out property <color> accent: root.look.accent;
     out property <color> text: root.look.text;
     out property <color> text-dim: root.look.text-dim;
