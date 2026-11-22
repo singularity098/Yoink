@@ -860,7 +860,16 @@ fn desktop_actions(
     };
     let mut icon_path = None;
     if let Some((bytes, ext)) = icon_bytes {
-        let dest = icon_dir.join(format!("{slug}.{ext}"));
+        // Named for its contents, so a changed icon gets a new path that
+        // the desktop's icon cache has not seen; the old file goes with the
+        // rest of what the previous version had.
+        let dest = icon_dir.join(crate::desktop::icon_file_name(&slug, &bytes, &ext));
+        if yoink {
+            let had = |p: &PathBuf| dep.installed.as_ref().is_some_and(|i| i.files.contains(p));
+            for old in crate::desktop::stale_own_icons(ctx.dirs, &dest).into_iter().filter(|p| !had(p)) {
+                actions.push(Action::Delete { path: old, dir: false });
+            }
+        }
         let existing = existing(&dest);
         actions.push(Action::Write {
             dest: dest.clone(),

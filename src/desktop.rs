@@ -190,9 +190,29 @@ pub enum OwnEntry {
 /// Marks the entries Yoink writes for itself.
 const SELF_MARK: &str = "X-Yoink-Self";
 
-/// The file names of Yoink's entry and icon, in the folders set in Options.
+/// The file name of Yoink's entry, in the folder set in Options.
 const OWN_ENTRY_NAME: &str = "yoink.desktop";
-const OWN_ICON_NAME: &str = "yoink.svg";
+
+/// An icon's file name: `stem`, a short hash of the icon's bytes, and `ext`
+/// (`chippy-1a2b3c4d.svg`). Desktops (KDE especially) cache icons by path,
+/// so a changed icon written under the old name keeps showing the old
+/// picture; a new name for new contents sidesteps the cache.
+pub fn icon_file_name(stem: &str, bytes: &[u8], ext: &str) -> String {
+    use sha2::{Digest, Sha256};
+    format!("{stem}-{}.{ext}", hex::encode(&Sha256::digest(bytes)[..4]))
+}
+
+/// Whether `name` is the file name of an icon Yoink wrote for itself: this
+/// version's (`yoink-<hash>.svg`) or an older one's (`yoink.svg`).
+fn is_own_icon_name(name: &str) -> bool {
+    let Some(rest) = name.strip_prefix(APP_ID).and_then(|r| r.strip_suffix(".svg")) else {
+        return false;
+    };
+    rest.is_empty()
+        || rest
+            .strip_prefix('-')
+            .is_some_and(|h| h.len() == 8 && h.bytes().all(|b| b.is_ascii_hexdigit()))
+}
 
 fn data_home() -> Option<PathBuf> {
     std::env::var_os("XDG_DATA_HOME")
@@ -206,7 +226,7 @@ fn data_home() -> Option<PathBuf> {
 fn own_paths(dirs: &Dirs) -> anyhow::Result<(PathBuf, PathBuf)> {
     Ok((
         dirs.path("desktop")?.join(OWN_ENTRY_NAME),
-        dirs.path("icons")?.join(OWN_ICON_NAME),
+        dirs.path("icons")?.join(icon_file_name(APP_ID, OWN_ICON, "svg")),
     ))
 }
 
@@ -254,16 +274,24 @@ pub fn own_entry(dirs: &Dirs) -> OwnEntry {
     }
 }
 
+/// The icon file an entry Yoink wrote for itself names, when it is one of
+/// Yoink's icon files.
+fn own_icon_named(text: &str) -> Option<PathBuf> {
+    let icon = PathBuf::from(field(text, "Icon")?);
+    let name = icon.file_name()?.to_str()?;
+    (icon.is_absolute() && is_own_icon_name(name)).then_some(icon)
+}
+
 /// Deletes an entry Yoink wrote for itself and the icon it names (when
-/// that is Yoink's icon file).
-fn delete_own(entry: &Path) {
+/// that is Yoink's icon file and not `keep`).
+fn delete_own(entry: &Path, keep: Option<&Path>) {
     let text = std::fs::read_to_string(entry).unwrap_or_default();
     if field(&text, SELF_MARK).is_none() {
         return;
     }
     let _ = std::fs::remove_file(entry);
-    if let Some(icon) = field(&text, "Icon").map(PathBuf::from) {
-        if icon.is_absolute() && icon.file_name().is_some_and(|n| n == OWN_ICON_NAME) {
+    if let Some(icon) = own_icon_named(&text) {
+        if Some(icon.as_path()) != keep {
             let _ = std::fs::remove_file(icon);
         }
     }
@@ -271,13 +299,31 @@ fn delete_own(entry: &Path) {
 
 /// Entries Yoink wrote for itself somewhere other than `keep` (an older
 /// version wrote to `~/.local/share/applications`, or the folder changed).
-fn delete_strays(dirs: &Dirs, keep: &Path) {
+fn delete_strays(dirs: &Dirs, keep: &Path, keep_icon: &Path) {
     for p in entry_candidates(dirs) {
         if p != keep && is_own(&p) {
             log::info!("removing Yoink's old desktop entry {}", p.display());
-            delete_own(&p);
+            delete_own(&p, Some(keep_icon));
         }
     }
+}
+
+/// Icons an entry Yoink wrote for itself left behind that `keep` replaces:
+/// the one its entry names, and an older Yoink's `yoink.svg`.
+pub fn stale_own_icons(dirs: &Dirs, keep: &Path) -> Vec<PathBuf> {
+    let Ok((entry, _)) = own_paths(dirs) else { return Vec::new() };
+    let Ok(text) = std::fs::read_to_string(&entry) else { return Vec::new() };
+    if field(&text, SELF_MARK).is_none() {
+        return Vec::new();
+    }
+    let legacy = dirs.path("icons").ok().map(|d| d.join(format!("{APP_ID}.svg")));
+    let mut out: Vec<PathBuf> = Vec::new();
+    for p in own_icon_named(&text).into_iter().chain(legacy) {
+        if p != keep && p.is_file() && !out.contains(&p) {
+            out.push(p);
+        }
+    }
+    out
 }
 
 /// Yoink's icon, as written next to its entry.
@@ -311,9 +357,13 @@ fn write_own_entry(dirs: &Dirs, hidden: bool) -> anyhow::Result<PathBuf> {
     use anyhow::Context;
     let exe = own_exe().context("cannot tell where Yoink is")?;
     let (entry, icon) = own_paths(dirs)?;
+    let stale = stale_own_icons(dirs, &icon);
     crate::config::write_atomic(&icon, OWN_ICON)?;
     crate::config::write_atomic(&entry, own_entry_text(&exe, Some(&icon), hidden).as_bytes())?;
-    delete_strays(dirs, &entry);
+    for old in stale {
+        let _ = std::fs::remove_file(old);
+    }
+    delete_strays(dirs, &entry, &icon);
     Ok(entry)
 }
 
@@ -329,7 +379,7 @@ pub fn retire_menu_entry(dirs: &Dirs, wanted: bool) {
             return;
         }
         log::info!("removing the desktop entry Yoink wrote for itself: {}", path.display());
-        delete_own(&path);
+        delete_own(&path, None);
     }
 }
 
@@ -443,10 +493,22 @@ mod tests {
         dirs.icons = "/custom/icons".into();
         let (entry, icon) = own_paths(&dirs).unwrap();
         assert_eq!(entry, Path::new("/custom/apps/yoink.desktop"));
-        assert_eq!(icon, Path::new("/custom/icons/yoink.svg"));
+        assert_eq!(icon, Path::new("/custom/icons").join(icon_file_name("yoink", OWN_ICON, "svg")));
         assert_eq!(entry_candidates(&dirs)[0], entry);
         dirs.desktop.clear();
         assert!(own_paths(&dirs).is_err());
+    }
+
+    #[test]
+    fn icon_names_carry_a_hash() {
+        let a = icon_file_name("chippy", b"<svg/>", "svg");
+        assert!(a.starts_with("chippy-") && a.ends_with(".svg") && a.len() == "chippy-12345678.svg".len(), "{a}");
+        assert_eq!(a, icon_file_name("chippy", b"<svg/>", "svg"));
+        assert_ne!(a, icon_file_name("chippy", b"<svg />", "svg"));
+        assert!(is_own_icon_name(&icon_file_name("yoink", OWN_ICON, "svg")));
+        assert!(is_own_icon_name("yoink.svg"));
+        assert!(!is_own_icon_name("yoink-extra.svg"));
+        assert!(!is_own_icon_name("chippy.svg"));
     }
 
     #[test]
