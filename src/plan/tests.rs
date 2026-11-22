@@ -402,7 +402,7 @@ fn yoink_reinstalls_over_itself() {
     // Its desktop entry follows the deployment's setting, like any app's:
     // Yoink's own entry and icon, pointed at where it was delivered.
     let entry = h.join("applications/yoink.desktop");
-    let icon = h.join("icons/yoink.svg");
+    let icon = h.join("icons").join(crate::desktop::icon_file_name("yoink", crate::desktop::own_icon(), "svg"));
     assert_eq!(t.new_files, vec![exe.clone(), icon.clone(), entry.clone()]);
     assert_eq!(t.exe.as_ref(), Some(&exe), "what a restart runs");
     let mut running = std::fs::File::open(&exe).unwrap();
@@ -431,9 +431,10 @@ fn yoink_replaces_the_entry_it_wrote_for_itself() {
     let h = env.root.join("home");
     // The entry and icon an older Yoink wrote from its Options switch.
     let entry = h.join("applications/yoink.desktop");
-    let icon = h.join("icons/yoink.svg");
+    let old_icon = h.join("icons/yoink.svg");
+    let icon = h.join("icons").join(crate::desktop::icon_file_name("yoink", crate::desktop::own_icon(), "svg"));
     write(&entry, b"[Desktop Entry]\nName=Yoink\nExec=/old/yoink\nX-Yoink-Self=true\n", 0o644);
-    write(&icon, b"<svg/>", 0o644);
+    write(&old_icon, b"<svg/>", 0o644);
     let (mut app, mut dep) = app(Kind::Binary);
     app.source = Source::parse("singularity098/yoink").unwrap();
     dep.desktop = true;
@@ -452,6 +453,10 @@ fn yoink_replaces_the_entry_it_wrote_for_itself() {
     let rows = t.rows();
     assert!(!rows.iter().any(|r| r.tone == 8 || r.detail.contains("did not install")), "{rows:?}");
     assert!(t.new_files.contains(&entry) && t.new_files.contains(&icon));
+    // The old icon, under its old name, goes.
+    let (_, res) = apply(&t, &stops(&env));
+    res.unwrap();
+    assert!(!old_icon.exists() && icon.is_file());
 }
 
 #[test]
@@ -505,7 +510,7 @@ fn yoink_updates_itself_as_a_binary() {
     assert!(rows.iter().any(|r| r.verb == "Note" && r.text.contains("this is Yoink itself")));
     let exe = env.dirs.path("bin").unwrap().join("yoink");
     let entry = env.dirs.path("desktop").unwrap().join("yoink.desktop");
-    let icon = env.dirs.path("icons").unwrap().join("yoink.svg");
+    let icon = env.dirs.path("icons").unwrap().join(crate::desktop::icon_file_name("yoink", crate::desktop::own_icon(), "svg"));
     assert_eq!(t.new_files, vec![exe.clone(), icon, entry], "installed as `yoink`, with its desktop entry");
     assert_eq!(t.exe.as_ref(), Some(&exe));
     let (_, res) = apply(&t, &stops(&env));
