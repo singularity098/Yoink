@@ -69,7 +69,8 @@ fn replace_program(value: &str, exe: &Path) -> String {
 }
 
 /// An entry found in an AppImage (or package), pointed at the delivered
-/// executable and icon, and marked as Yoink's.
+/// executable and icon, shown in the menu (`NoDisplay` and `Hidden`
+/// dropped), and marked as Yoink's.
 pub fn rewrite(text: &str, exe: &Path, icon: Option<&Path>, app_id: &str) -> String {
     let mut out = String::new();
     let mut group = String::new();
@@ -104,6 +105,9 @@ pub fn rewrite(text: &str, exe: &Path, icon: Option<&Path>, app_id: &str) -> Str
                             continue;
                         }
                     }
+                    // Hidden from the menu (or marked deleted) by its author;
+                    // the entry is delivered so the app shows in the menu.
+                    "NoDisplay" | "Hidden" if group == "[Desktop Entry]" => continue,
                     "X-Yoink-App" | "X-AppImage-Integrate" => continue,
                     _ => {}
                 }
@@ -462,6 +466,15 @@ mod tests {
         assert!(out.contains("X-Yoink-App=chippy\n"));
         assert!(!out.contains("X-AppImage-Integrate"));
         assert_eq!(out.matches("X-Yoink-App").count(), 1);
+    }
+
+    #[test]
+    fn rewritten_entry_is_shown() {
+        let text = "[Desktop Entry]\nName=VRRTest\nExec=vrrtest\nNoDisplay=true\nHidden=true\n\n[Desktop Action A]\nName=A\nExec=vrrtest -a\n";
+        let out = rewrite(text, Path::new("/a/VRRTest.AppImage"), None, "vrrtest");
+        assert_eq!(field(&out, "NoDisplay"), None, "{out}");
+        assert_eq!(field(&out, "Hidden"), None, "{out}");
+        assert!(out.contains("[Desktop Action A]\nName=A\nExec=/a/VRRTest.AppImage -a\n"), "{out}");
     }
 
     #[test]

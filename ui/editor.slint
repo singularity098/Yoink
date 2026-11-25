@@ -295,6 +295,8 @@ export component EditorDialog inherits Rectangle {
 
                 // ---------------------------------------- the deployment
                 ScrollView {
+                    // Drag to scroll, for touchscreens (winit gives touches as mouse events).
+                    mouse-drag-pan-enabled: true;
                     horizontal-stretch: 1;
                     viewport-height: form.preferred-height;
                     viewport-width: self.visible-width;
@@ -398,6 +400,8 @@ export component EditorDialog inherits Rectangle {
                                 wrap: word-wrap;
                             }
                             ScrollView {
+                                // Drag to scroll, for touchscreens (winit gives touches as mouse events).
+                                mouse-drag-pan-enabled: true;
                                 x: 6px;
                                 y: 6px;
                                 width: parent.width - 12px;

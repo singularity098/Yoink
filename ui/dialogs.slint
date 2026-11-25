@@ -127,6 +127,8 @@ export component PlanDialog inherits Frame {
             border-width: 1px;
             border-color: Theme.border;
             ScrollView {
+                // Drag to scroll, for touchscreens (winit gives touches as mouse events).
+                mouse-drag-pan-enabled: true;
                 x: 8px;
                 y: 8px;
                 width: parent.width - 16px;
@@ -230,6 +232,8 @@ export component PickerDialog inherits Frame {
             border-width: 1px;
             border-color: Theme.border;
             ScrollView {
+                // Drag to scroll, for touchscreens (winit gives touches as mouse events).
+                mouse-drag-pan-enabled: true;
                 x: 6px;
                 y: 6px;
                 width: parent.width - 12px;

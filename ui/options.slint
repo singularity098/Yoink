@@ -151,6 +151,8 @@ export component OptionsPanel inherits Rectangle {
             }
         }
         ScrollView {
+            // Drag to scroll, for touchscreens (winit gives touches as mouse events).
+            mouse-drag-pan-enabled: true;
             vertical-stretch: 1;
             viewport-height: col.preferred-height;
             viewport-width: self.visible-width;
