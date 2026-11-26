@@ -170,10 +170,12 @@ fun OptionsScreen(model: YoinkModel, padding: PaddingValues, onBack: () -> Unit)
             SectionTitle("Yoink")
             Panel {
                 Text("Yoink ${BuildConfig.VERSION_NAME} (build ${BuildConfig.VERSION_CODE})", style = MaterialTheme.typography.bodyMedium)
-                if (BuildConfig.COMMIT.isNotEmpty()) Dim("Commit ${BuildConfig.COMMIT.take(7)}")
+                // Dev builds have the commit in their version already.
+                val short = BuildConfig.COMMIT.take(7)
+                if (short.isNotEmpty() && !BuildConfig.VERSION_NAME.endsWith(short)) Dim("Commit $short")
                 Spacer(Modifier.height(8.dp))
                 Dim(
-                    "Yoink can keep itself up to date: add singularity098/Yoink and pick Yoink-android.apk " +
+                    "Yoink can keep itself up to date: add singularity098/Yoink and pick Yoink-<version>.apk " +
                         "(from Releases, or the Actions artifact for dev builds)."
                 )
                 Spacer(Modifier.height(10.dp))

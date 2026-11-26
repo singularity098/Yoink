@@ -88,15 +88,19 @@ jobs:
           YOINK_KEY_ALIAS: ${{ secrets.ANDROID_KEY_ALIAS }}
           YOINK_KEY_PASSWORD: ${{ secrets.ANDROID_KEY_PASSWORD }}
         run: |
+          # Gradle names the version (the crate's and the commit); a tag gives its own.
+          if [ "$GITHUB_REF_TYPE" = tag ]; then export YOINK_VERSION_NAME="${GITHUB_REF_NAME#v}"; fi
           ./gradlew --no-daemon testDebugUnitTest assembleRelease
-          cp app/build/outputs/apk/release/app-release.apk Yoink-android.apk
+          cp app/build/outputs/apk/release/Yoink-*.apk .
+          echo "APK=$(basename Yoink-*.apk)" >> "$GITHUB_ENV"
       - uses: actions/upload-artifact@v4
         with:
-          name: Yoink-android.apk
-          path: android/Yoink-android.apk
+          name: ${{ env.APK }}
+          path: android/${{ env.APK }}
           if-no-files-found: error
+          compression-level: 0
       - name: Release
         if: startsWith(github.ref, 'refs/tags/v')
         uses: softprops/action-gh-release@v2
         with:
-          files: android/Yoink-android.apk
+          files: android/${{ env.APK }}

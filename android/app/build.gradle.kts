@@ -14,6 +14,13 @@ val commit: String = System.getenv("GITHUB_SHA") ?: runCatching {
     if (p.waitFor() == 0) out.toString().trim() else ""
 }.getOrDefault("")
 
+// The version: YOINK_VERSION_NAME when CI sets it (a v* tag's number), otherwise the
+// crate's version and the commit, so every APK says what it is in its name and in Options.
+val cargoVersion = Regex("""(?m)^version\s*=\s*"([^"]+)"""")
+    .find(rootProject.file("../Cargo.toml").readText())!!.groupValues[1]
+val appVersion = System.getenv("YOINK_VERSION_NAME")?.takeIf { it.isNotBlank() }
+    ?: listOf(cargoVersion, commit.take(7)).filter { it.isNotEmpty() }.joinToString("-")
+
 // A release keystore from the environment (CI secrets). Without one, every
 // build (debug, release, local or CI) is signed with the dev keystore kept
 // in the repository, so each build installs over the last one instead of
@@ -32,7 +39,7 @@ android {
         targetSdk = 36
         // CI numbers builds by run so every Actions build is an update.
         versionCode = System.getenv("GITHUB_RUN_NUMBER")?.toIntOrNull() ?: 1
-        versionName = "0.1.0"
+        versionName = appVersion
         buildConfigField("String", "COMMIT", "\"$commit\"")
     }
 
@@ -73,6 +80,16 @@ android {
     buildFeatures {
         compose = true
         buildConfig = true
+    }
+
+    // Yoink-<version>.apk (and Yoink-<version>-debug.apk) instead of app-release.apk.
+    applicationVariants.all {
+        val variant = this
+        val type = if (variant.buildType.name == "release") "" else "-${variant.buildType.name}"
+        outputs.all {
+            (this as com.android.build.gradle.internal.api.BaseVariantOutputImpl).outputFileName =
+                "Yoink-${variant.versionName}$type.apk"
+        }
     }
 
     packaging {

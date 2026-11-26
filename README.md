@@ -214,7 +214,7 @@ themes, that deals only in APKs and installs them itself.
   cloud folder) and Yoink also saves each APK it installs there, replacing
   that app's previous one. If saving fails, the install still goes ahead.
 - **Yoink updating itself**: add `singularity098/Yoink` and pick
-  `Yoink-android.apk`, from Releases or Actions builds.
+  `Yoink-<version>.apk`, from Releases or Actions builds.
 
 Needs Android 8 or newer. Split APK bundles (`.apks`, `.xapk`) aren't
 supported.
@@ -233,7 +233,8 @@ cd android
 ./gradlew testDebugUnitTest
 ```
 
-The APK is written to `app/build/outputs/apk/release/app-release.apk`.
+The APK is written to `app/build/outputs/apk/release/Yoink-<version>.apk`: the
+crate's version and the commit, as in `Yoink-0.1.0-3eeaca9.apk`.
 You need JDK 17 or newer and the Android SDK (platform 36), found through
 `ANDROID_HOME` or `local.properties`.
 

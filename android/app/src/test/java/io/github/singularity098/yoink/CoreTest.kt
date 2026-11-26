@@ -36,6 +36,10 @@ class CoreTest {
         val p = Pattern.derive("Surge-XT-1.3.1-linux-x86_64.tar.gz", "release_xt_1.3.1")
         assertTrue(p, Pattern.matches(p, "Surge-XT-1.3.4-linux-x86_64.tar.gz"))
         assertEquals("app-*-arm64-v8a-release.apk", Pattern.derive("app-1.4.2-arm64-v8a-release.apk", "v1.4.2"))
+        // Dev builds of these apps: <App>-<version>-<commit>.apk.
+        val dev = Pattern.derive("Yoink-0.1.0-3eeaca9.apk")
+        assertEquals("Yoink-*-*.apk", dev)
+        assertTrue(dev, Pattern.matches(dev, "Yoink-0.2.0-b1c2d3e.apk"))
     }
 
     @Test
