@@ -1,5 +1,5 @@
 <?xml version="1.0" encoding="utf-8"?>
-<!-- Yoink's launcher icon: a horseshoe magnet pulling a taped cube-shaped carton. The tile is ic_launcher_background.
+<!-- Yoink's launcher icon: a horseshoe magnet pulling a cube-shaped carton. The tile is ic_launcher_background.
      Generated from assets/yoink-icon.svg (Iris), scaled by 0.3 into the 66dp safe zone of the
      108dp adaptive-icon canvas. Vector drawables have no dashes, so the field lines are
      drawn as short segments. -->
@@ -27,7 +27,6 @@
             <path android:pathData="M 128 176 L 158 190 L 128 204 L 98 190 Z" android:fillColor="#FFBAA6F0" android:fillAlpha="0.25" />
             <path android:pathData="M 98 190 L 128 204 V 236 L 98 222 Z" android:fillColor="#FF1C163B" android:strokeColor="#FFBAA6F0" android:strokeWidth="4" android:strokeLineJoin="round" />
             <path android:pathData="M 158 190 L 128 204 V 236 L 158 222 Z" android:fillColor="#FF372A66" android:strokeColor="#FFBAA6F0" android:strokeWidth="4" android:strokeLineJoin="round" />
-            <path android:pathData="M 113 183 L 143 197 V 204 L 113 190 Z" android:fillColor="#FFBAA6F0" android:fillAlpha="0.45" />
         </group>
     </group>
 </vector>
