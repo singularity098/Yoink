@@ -26,7 +26,14 @@ import java.security.MessageDigest
 import java.util.UUID
 
 /** What an app is doing right now. */
-data class Busy(val label: String, val done: Long = 0, val total: Long = -1, val cancellable: Boolean = false)
+data class Busy(
+    val label: String,
+    val done: Long = 0,
+    val total: Long = -1,
+    val cancellable: Boolean = false,
+    /** Only looking for a newer version: shown in the badge, without changing the card's layout. */
+    val checking: Boolean = false,
+)
 
 /** The installed package, as Android reports it. */
 data class Present(val versionName: String, val versionCode: Long, val lastUpdate: Long)
@@ -214,7 +221,7 @@ class YoinkModel(app: Application) : AndroidViewModel(app) {
 
     private suspend fun check(id: String): Remote? {
         val a = app(id) ?: return null
-        busy[id] = Busy("Checking…")
+        busy[id] = Busy("Checking…", checking = true)
         return try {
             val remote = withContext(Dispatchers.IO) { github(a).resolve(a.channel, a.pattern, settings.allowFailed) }
             update(id) { it.copy(latest = remote, error = "") }

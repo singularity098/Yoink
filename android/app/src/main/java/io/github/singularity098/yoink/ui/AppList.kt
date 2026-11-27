@@ -19,6 +19,7 @@ import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
@@ -95,9 +96,10 @@ fun AppListScreen(model: YoinkModel, padding: PaddingValues, onOptions: () -> Un
         }
 
         val updates = model.updatable
-        if (updates.size > 1 || model.checking) {
+        // Always present (when there are apps), so it appearing doesn't push the list down.
+        if (model.apps.isNotEmpty()) {
             Row(
-                Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 6.dp),
+                Modifier.fillMaxWidth().heightIn(min = 56.dp).padding(horizontal = 16.dp, vertical = 6.dp),
                 verticalAlignment = Alignment.CenterVertically,
                 horizontalArrangement = Arrangement.spacedBy(8.dp),
             ) {
@@ -213,7 +215,9 @@ private fun SortButton(model: YoinkModel) {
 private fun AppRow(model: YoinkModel, app: AppEntry, onRemove: () -> Unit) {
     val look = LocalLook.current
     val context = LocalContext.current
-    val busy = model.busy[app.id]
+    // A check only changes the badge: the card keeps its size and buttons so the list doesn't jump.
+    val checking = model.busy[app.id]?.checking == true
+    val busy = model.busy[app.id]?.takeUnless { it.checking }
     val status = model.status(app)
     val present = model.present[app.packageName]
     var menu by remember { mutableStateOf(false) }
@@ -227,7 +231,7 @@ private fun AppRow(model: YoinkModel, app: AppEntry, onRemove: () -> Unit) {
                 Dim("${app.source} · ${app.channel.label}", maxLines = 1)
                 Spacer(Modifier.height(4.dp))
                 Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(6.dp)) {
-                    when (status) {
+                    if (checking) Badge("Checking…", look.textDim) else when (status) {
                         Status.NotInstalled -> Badge("Not installed", look.textDim)
                         Status.UpdateAvailable -> Badge("Update: ${app.latest?.version}", look.accent)
                         Status.UpToDate -> Badge("Up to date", Palette.ok)

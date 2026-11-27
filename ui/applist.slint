@@ -107,17 +107,42 @@ export component AppIcon inherits Rectangle {
     }
 }
 
-component StatusDot inherits Rectangle {
+// The status of a deployment as a tinted pill, like the Android badge:
+// "up to date" in green, an update in the theme's paint, and so on.
+component StatusPill inherits Rectangle {
     in property <int> tone;
-    width: 8px;
-    height: 8px;
-    border-radius: 4px;
-    background: root.tone == 1 ? Theme.ok
+    in property <string> text;
+    property <color> tint: root.tone == 1 ? Theme.ok
         : root.tone == 2 ? Theme.paint-a
         : root.tone == 3 ? Theme.paint-b
-        : root.tone == 4 ? Theme.danger
+        : root.tone == 4 ? Theme.danger.brighter(30%)
         : root.tone == 5 ? Theme.warn
         : Theme.text-faint;
+    horizontal-stretch: 1;
+    min-height: 22px;
+    HorizontalLayout {
+        alignment: end;
+        Rectangle {
+            border-radius: self.height / 2;
+            background: root.text != "" && root.tone != 0 ? root.tint.with-alpha(0.14) : transparent;
+            border-width: root.text != "" && root.tone != 0 ? 1px : 0px;
+            border-color: root.tint.with-alpha(0.4);
+            HorizontalLayout {
+                padding-left: 10px;
+                padding-right: 10px;
+                padding-top: 2px;
+                padding-bottom: 2px;
+                Text {
+                    text: root.text;
+                    color: root.tint;
+                    font-size: Theme.font-small;
+                    font-weight: Theme.regular;
+                    vertical-alignment: center;
+                    overflow: elide;
+                }
+            }
+        }
+    }
 }
 
 component DepLine inherits Rectangle {
@@ -127,10 +152,6 @@ component DepLine inherits Rectangle {
         spacing: 2px;
         HorizontalLayout {
             spacing: 10px;
-            StatusDot {
-                y: (parent.height - self.height) / 2;
-                tone: root.dep.tone;
-            }
             Text {
                 text: root.dep.label;
                 color: Theme.text-dim;
@@ -158,14 +179,9 @@ component DepLine inherits Rectangle {
                 horizontal-stretch: 0;
                 overflow: elide;
             }
-            Text {
+            StatusPill {
                 text: root.dep.status;
-                color: root.dep.tone == 4 ? Theme.danger.brighter(30%) : root.dep.tone == 2 ? Theme.paint-a : Theme.text-faint;
-                font-size: Theme.font-small;
-                vertical-alignment: center;
-                horizontal-alignment: right;
-                horizontal-stretch: 1;
-                overflow: elide;
+                tone: root.dep.tone;
             }
         }
         if root.dep.progress >= 0: Rectangle {
