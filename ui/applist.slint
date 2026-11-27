@@ -118,29 +118,24 @@ component StatusPill inherits Rectangle {
         : root.tone == 4 ? Theme.danger.brighter(30%)
         : root.tone == 5 ? Theme.warn
         : Theme.text-faint;
-    horizontal-stretch: 1;
+    horizontal-stretch: 0;
     min-height: 22px;
+    border-radius: self.height / 2;
+    background: root.text != "" && root.tone != 0 ? root.tint.with-alpha(0.14) : transparent;
+    border-width: root.text != "" && root.tone != 0 ? 1px : 0px;
+    border-color: root.tint.with-alpha(0.4);
     HorizontalLayout {
-        alignment: end;
-        Rectangle {
-            border-radius: self.height / 2;
-            background: root.text != "" && root.tone != 0 ? root.tint.with-alpha(0.14) : transparent;
-            border-width: root.text != "" && root.tone != 0 ? 1px : 0px;
-            border-color: root.tint.with-alpha(0.4);
-            HorizontalLayout {
-                padding-left: 10px;
-                padding-right: 10px;
-                padding-top: 2px;
-                padding-bottom: 2px;
-                Text {
-                    text: root.text;
-                    color: root.tint;
-                    font-size: Theme.font-small;
-                    font-weight: Theme.regular;
-                    vertical-alignment: center;
-                    overflow: elide;
-                }
-            }
+        padding-left: 10px;
+        padding-right: 10px;
+        padding-top: 2px;
+        padding-bottom: 2px;
+        Text {
+            text: root.text;
+            color: root.tint;
+            font-size: Theme.font-small;
+            font-weight: Theme.regular;
+            vertical-alignment: center;
+            overflow: elide;
         }
     }
 }
@@ -178,10 +173,6 @@ component DepLine inherits Rectangle {
                 vertical-alignment: center;
                 horizontal-stretch: 0;
                 overflow: elide;
-            }
-            StatusPill {
-                text: root.dep.status;
-                tone: root.dep.tone;
             }
         }
         if root.dep.progress >= 0: Rectangle {
@@ -257,26 +248,39 @@ component AppCard inherits Rectangle {
                 font-size: Theme.font-small;
             }
         }
-        VerticalLayout {
-            alignment: start;
-            spacing: 6px;
+        // The status pills, the Update button and the menu, centred on the card.
+        HorizontalLayout {
+            spacing: 10px;
             horizontal-stretch: 0;
-            HorizontalLayout {
-                spacing: 6px;
-                BigButton {
-                    text: "Update";
-                    icon-line: MoreIcons.download-line;
-                    primary: root.app.updatable;
-                    enabled: root.app.updatable && !root.app.busy && !Apps.busy;
-                    tip: "Download and install what is new (you see the full list first)";
-                    clicked => { Apps.update(root.index); }
+            VerticalLayout {
+                alignment: center;
+                spacing: 4px;
+                for d in root.app.deps: StatusPill {
+                    text: d.status;
+                    tone: d.tone;
                 }
-                IconButton {
-                    y: (parent.height - self.height) / 2;
-                    icon: "";
-                    icon-solid: Icons.more-solid;
-                    tip: "More";
-                    clicked => { menu.show(); }
+            }
+            VerticalLayout {
+                alignment: center;
+                HorizontalLayout {
+                    spacing: 6px;
+                    BigButton {
+                        text: "Update";
+                        icon-line: MoreIcons.download-line;
+                        primary: root.app.updatable;
+                        enabled: root.app.updatable && !root.app.busy && !Apps.busy;
+                        tip: "Download and install what is new (you see the full list first)";
+                        clicked => { Apps.update(root.index); }
+                    }
+                    VerticalLayout {
+                        alignment: center;
+                        IconButton {
+                            icon: "";
+                            icon-solid: Icons.more-solid;
+                            tip: "More";
+                            clicked => { menu.show(); }
+                        }
+                    }
                 }
             }
         }
@@ -284,7 +288,7 @@ component AppCard inherits Rectangle {
 
     menu := PopupWindow {
         x: root.width - 240px - Theme.pad;
-        y: Theme.pad + 48px;
+        y: root.height / 2 + Theme.touch / 2 + 4px;
         width: 240px;
         Rectangle {
             background: Theme.popup;
