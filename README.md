@@ -113,7 +113,7 @@ that yours is read-only.
 ### Yoink updating itself
 
 Add `singularity098/Yoink` as an app (or use Options → Yoink → *Add Yoink to
-your apps*) and pick `yoink-x86_64-linux`, from Releases or Actions builds.
+your apps*) and pick `Yoink-<version>-linux-x86_64`, from Releases or Actions builds.
 
 It is installed as `yoink` in your bin folder, checked and updated with
 everything else, and installed last. When it has been updated, **Restart
@@ -186,7 +186,7 @@ packages (on Debian and Ubuntu, `libfontconfig-dev` and
 cargo test
 ```
 
-CI builds `yoink-x86_64-linux` on Ubuntu 22.04, so it runs on distributions
+CI builds `Yoink-<version>-linux-x86_64` on Ubuntu 22.04, so it runs on distributions
 with glibc 2.35 or newer.
 
 ## Android
