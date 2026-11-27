@@ -74,6 +74,10 @@ fun AppListScreen(model: YoinkModel, padding: PaddingValues, onOptions: () -> Un
         ) {
             Text("Yoink", style = MaterialTheme.typography.titleLarge)
             Spacer1()
+            if (model.apps.size > 1) {
+                SortButton(model)
+                Spacer(Modifier.width(4.dp))
+            }
             RoundIconButton(Icons.Default.Refresh, "Check for updates", { model.checkAll() }, enabled = !model.checking && model.apps.isNotEmpty())
             RoundIconButton(Icons.Default.Settings, "Options", onOptions)
         }
@@ -91,7 +95,7 @@ fun AppListScreen(model: YoinkModel, padding: PaddingValues, onOptions: () -> Un
         }
 
         val updates = model.updatable
-        if (updates.size > 1 || model.checking || model.apps.size > 1) {
+        if (updates.size > 1 || model.checking) {
             Row(
                 Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 6.dp),
                 verticalAlignment = Alignment.CenterVertically,
@@ -106,7 +110,6 @@ fun AppListScreen(model: YoinkModel, padding: PaddingValues, onOptions: () -> Un
                     modifier = Modifier.weight(1f, fill = false),
                 )
                 Spacer1()
-                if (model.apps.size > 1) SortButton(model)
                 if (updates.size > 1) BigButton(
                     "Update all", primary = true, enabled = !model.planning,
                     onClick = { model.prepare(updates.map { it.id }) },
