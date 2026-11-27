@@ -74,7 +74,8 @@ GitHub only allows Actions builds to be downloaded with a token (see below).
   one) and falls back to the owner's avatar. An AppImage's own icon
   replaces it at the first update. In the app's edit dialog, *Choose…* uses
   an image of your own, *From repo* fetches the repository's icon again,
-  and *Follow the repo* keeps it in step with the repository.
+  and *Follow the repo* (on for newly added apps, off once you choose your
+  own image) keeps it in step with the repository.
 - **Sort** the list by date added, name, last updated, updates first or
   repository, optionally reversed. Yoink remembers your choice.
 - **Remove** an app: delete everything it put in place (you see the list

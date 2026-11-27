@@ -788,6 +788,11 @@ impl App {
         if !app.icon_auto || app.icon_source == IconSource::Custom {
             return;
         }
+        // An avatar (the repository has no icon) never replaces the
+        // package's own icon.
+        if icon.source == IconSource::Avatar && app.icon_source == IconSource::AppImage {
+            return;
+        }
         let same = app
             .icon_path()
             .and_then(|p| std::fs::read(p).ok())
@@ -1172,9 +1177,16 @@ impl App {
                         when: crate::now(),
                     });
                     ok += 1;
-                    // The package's own icon is better than an avatar.
+                    // The package's own icon is better than an avatar, even
+                    // for an app that follows the repository's icon (only an
+                    // icon file found in the repository is kept then).
                     if let Some((bytes, ext, source)) = &t.icon {
-                        if app.icon_source != IconSource::Custom && !app.icon_auto {
+                        let keep = match app.icon_source {
+                            IconSource::Custom => true,
+                            IconSource::Repo => app.icon_auto,
+                            _ => false,
+                        };
+                        if !keep {
                             if let Ok(file) = save_icon(&app.id, app.icon.as_deref(), bytes, ext) {
                                 app.icon = Some(file);
                                 app.icon_source = *source;
@@ -1427,7 +1439,8 @@ impl App {
                     },
                     icon: None,
                     icon_source: IconSource::None,
-                    icon_auto: false,
+                    // Follow the repository's icon unless one is picked by hand.
+                    icon_auto: true,
                     description: String::new(),
                     deployments: Vec::new(),
                 },
