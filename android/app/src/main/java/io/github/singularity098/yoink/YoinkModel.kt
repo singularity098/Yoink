@@ -36,6 +36,19 @@ data class PlanItem(val app: AppEntry, val remote: Remote, val reinstall: Boolea
 
 enum class Status { NotInstalled, UpdateAvailable, UpToDate, Unknown }
 
+/** The orders the list can be sorted in, as on the desktop: the setting's value, the label. */
+enum class Sort(val key: String, val label: String) {
+    Added("added", "Date added"),
+    Name("name", "Name"),
+    Updated("updated", "Last updated"),
+    Updates("updates", "Updates first"),
+    Repo("repo", "Repository");
+
+    companion object {
+        fun of(key: String) = entries.firstOrNull { it.key == key } ?: Added
+    }
+}
+
 class YoinkModel(app: Application) : AndroidViewModel(app) {
     private val context get() = getApplication<Application>()
     private val pm: PackageManager get() = context.packageManager
@@ -61,6 +74,10 @@ class YoinkModel(app: Application) : AndroidViewModel(app) {
     var hasToken by mutableStateOf(settings.token != null)
         private set
     var allowFailed by mutableStateOf(settings.allowFailed)
+        private set
+    var sort by mutableStateOf(Sort.of(settings.sort))
+        private set
+    var sortReversed by mutableStateOf(settings.sortReversed)
         private set
     var editor by mutableStateOf<Editor?>(null)
         private set
@@ -104,6 +121,31 @@ class YoinkModel(app: Application) : AndroidViewModel(app) {
     }
 
     val updatable get() = apps.filter { status(it) == Status.UpdateAvailable }
+
+    /** The apps in the order the list shows them. */
+    val sortedApps: List<AppEntry>
+        get() {
+            val byName = compareBy<AppEntry> { it.name.lowercase() }
+            val sorted = when (sort) {
+                Sort.Added -> apps
+                Sort.Name -> apps.sortedWith(byName)
+                // Newest first.
+                Sort.Updated -> apps.sortedWith(compareByDescending<AppEntry> { it.installed?.at ?: 0L }.then(byName))
+                Sort.Updates -> apps.sortedWith(compareByDescending<AppEntry> { status(it) == Status.UpdateAvailable }.then(byName))
+                Sort.Repo -> apps.sortedWith(compareBy<AppEntry> { it.source.lowercase() }.then(byName))
+            }
+            return if (sortReversed) sorted.reversed() else sorted
+        }
+
+    fun chooseSort(s: Sort) {
+        sort = s
+        settings.sort = s.key
+    }
+
+    fun changeSortReversed(v: Boolean) {
+        sortReversed = v
+        settings.sortReversed = v
+    }
 
     // ----------------------------------------------------------- the phone
 

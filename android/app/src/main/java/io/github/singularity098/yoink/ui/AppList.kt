@@ -26,6 +26,7 @@ import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.Check
 import androidx.compose.material.icons.filled.Close
 import androidx.compose.material.icons.filled.MoreVert
 import androidx.compose.material.icons.filled.Refresh
@@ -34,6 +35,8 @@ import androidx.compose.material.icons.filled.Warning
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.DropdownMenu
 import androidx.compose.material3.DropdownMenuItem
+import androidx.compose.material3.HorizontalDivider
+import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
@@ -53,6 +56,7 @@ import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import io.github.singularity098.yoink.AppEntry
+import io.github.singularity098.yoink.Sort
 import io.github.singularity098.yoink.Status
 import io.github.singularity098.yoink.YoinkModel
 
@@ -87,17 +91,22 @@ fun AppListScreen(model: YoinkModel, padding: PaddingValues, onOptions: () -> Un
         }
 
         val updates = model.updatable
-        if (updates.size > 1 || model.checking) {
+        if (updates.size > 1 || model.checking || model.apps.size > 1) {
             Row(
                 Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 6.dp),
                 verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.spacedBy(8.dp),
             ) {
-                Text(
+                if (model.checking || updates.size > 1) Text(
                     if (model.checking) "Checking for updates…" else "${updates.size} updates",
                     style = MaterialTheme.typography.bodyMedium,
                     color = look.textDim,
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis,
+                    modifier = Modifier.weight(1f, fill = false),
                 )
                 Spacer1()
+                if (model.apps.size > 1) SortButton(model)
                 if (updates.size > 1) BigButton(
                     "Update all", primary = true, enabled = !model.planning,
                     onClick = { model.prepare(updates.map { it.id }) },
@@ -131,7 +140,7 @@ fun AppListScreen(model: YoinkModel, padding: PaddingValues, onOptions: () -> Un
                     verticalArrangement = Arrangement.spacedBy(10.dp),
                     modifier = Modifier.fillMaxSize(),
                 ) {
-                    items(model.apps, key = { it.id }) { app ->
+                    items(model.sortedApps, key = { it.id }) { app ->
                         AppRow(model, app, onRemove = { removing = app })
                     }
                 }
@@ -167,6 +176,33 @@ fun AppListScreen(model: YoinkModel, padding: PaddingValues, onOptions: () -> Un
             },
             containerColor = Palette.bg,
         )
+    }
+}
+
+/** Picks the order of the list, as the desktop's Sort button does. */
+@Composable
+private fun SortButton(model: YoinkModel) {
+    var open by remember { mutableStateOf(false) }
+    Box {
+        BigButton(
+            "Sort: ${model.sort.label}" + if (model.sortReversed) " (reversed)" else "",
+            onClick = { open = true },
+        )
+        DropdownMenu(expanded = open, onDismissRequest = { open = false }, containerColor = Palette.bg) {
+            for (s in Sort.entries) {
+                DropdownMenuItem(
+                    text = { Text(s.label) },
+                    onClick = { open = false; model.chooseSort(s) },
+                    trailingIcon = { if (s == model.sort) Icon(Icons.Default.Check, "Selected") },
+                )
+            }
+            HorizontalDivider(color = Palette.border)
+            DropdownMenuItem(
+                text = { Text("Reverse order") },
+                onClick = { open = false; model.changeSortReversed(!model.sortReversed) },
+                trailingIcon = { if (model.sortReversed) Icon(Icons.Default.Check, "On") },
+            )
+        }
     }
 }
 

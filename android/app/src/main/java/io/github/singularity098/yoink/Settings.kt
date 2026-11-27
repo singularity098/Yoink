@@ -28,6 +28,15 @@ class Settings(context: Context) {
         get() = prefs.getBoolean("allow_failed", false)
         set(v) = prefs.edit().putBoolean("allow_failed", v).apply()
 
+    /** The order of the list: one of [Sort]'s keys. */
+    var sort: String
+        get() = prefs.getString("sort", null) ?: Sort.Added.key
+        set(v) = prefs.edit().putString("sort", v).apply()
+
+    var sortReversed: Boolean
+        get() = prefs.getBoolean("sort_reversed", false)
+        set(v) = prefs.edit().putBoolean("sort_reversed", v).apply()
+
     /** The folder (a document tree URI) installed APKs are copied to; null: none. */
     var apkFolder: String?
         get() = prefs.getString("apk_folder", null)
