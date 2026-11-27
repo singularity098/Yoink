@@ -1,5 +1,5 @@
 <svg xmlns="http://www.w3.org/2000/svg" width="256" height="256" viewBox="0 0 256 256">
-  <!-- A horseshoe magnet pulling a taped carton up its field lines, in the
+  <!-- A horseshoe magnet pulling a taped cube-shaped carton up its field lines, in the
        Iris theme. Inside the app these colours are swapped for the theme's
        (src/icons.rs, `logo_svg`): #7278fe, #c688d6 and #a85eea are the
        theme's paint a, b and c; the rest are mixed from them there
@@ -34,10 +34,12 @@
     <path d="M92 160 Q128 178 164 160"/>
     <path d="M84 167 Q128 196 172 167"/>
   </g>
-  <g transform="translate(128 204) rotate(7) scale(1.22) translate(-128 -204)">
-    <rect x="100" y="180" width="56" height="46" rx="6" fill="url(#carton)" stroke="#baa6f0" stroke-width="5"/>
-    <rect x="120" y="182" width="16" height="42" fill="#baa6f0" opacity=".35"/>
-    <path d="M102 195 H154" stroke="#baa6f0" stroke-width="3" opacity=".5"/>
+  <g transform="translate(128 204) rotate(6) scale(1.2) translate(-128 -204)" stroke="#baa6f0" stroke-width="4" stroke-linejoin="round">
+    <path d="M128 176 L158 190 L128 204 L98 190 Z" fill="#372a66"/>
+    <path d="M128 176 L158 190 L128 204 L98 190 Z" fill="#baa6f0" fill-opacity=".25"/>
+    <path d="M98 190 L128 204 V236 L98 222 Z" fill="#1c163b"/>
+    <path d="M158 190 L128 204 V236 L158 222 Z" fill="#372a66"/>
+    <path d="M113 183 L143 197 V204 L113 190 Z" fill="#baa6f0" fill-opacity=".45" stroke="none"/>
   </g>
   <rect x="9" y="9" width="238" height="238" rx="55" fill="none" stroke="#fff" stroke-opacity=".09" stroke-width="2"/>
 </svg>
