@@ -11,7 +11,7 @@ import { BigButton, IconButton, Tips } from "widgets.slint";
 import { Icon, Icons, MoreIcons, IconArt, Logo } from "icons.slint";
 import { TooltipLayer } from "tooltip.slint";
 import { AppRow, DepRow, DirRow, PlanRow, Cand, EdDep, PickOpt } from "types.slint";
-import { Apps, AppList, SortButton } from "applist.slint";
+import { Apps, AppList, SortButton, StatusPill } from "applist.slint";
 import { Prefs, OptionsPanel } from "options.slint";
 import { Editor, EditorDialog } from "editor.slint";
 import { PlanView, Picker, Confirm, PlanDialog, PickerDialog, ConfirmDialog } from "dialogs.slint";
@@ -157,6 +157,19 @@ component Toolbar inherits HorizontalLayout {
         clicked => { Apps.restart(); }
     }
     Rectangle { horizontal-stretch: 1; }
+    // The whole list's status, so an update shows without scrolling (while
+    // a plan is prepared or applied, the busy text below says what happens).
+    if !Apps.busy && Apps.summary != "": VerticalLayout {
+        alignment: center;
+        StatusPill {
+            text: Apps.summary;
+            tone: Apps.summary-tone;
+            always-framed: true;
+            min-height: 30px;
+            pad-x: 14px;
+            font-size: Theme.font-small + 1px;
+        }
+    }
     if Apps.rows.length > 1: SortButton { }
     if Apps.busy: HorizontalLayout {
         spacing: 8px;

@@ -16,6 +16,10 @@ export global Apps {
     in property <string> busy-text;
     // Yoink itself was updated: a restart runs the new version.
     in property <bool> restart-ready;
+    // One status for the whole list ("Everything up to date", "3 updates
+    // available"…), toned like a deployment's status.
+    in property <string> summary;
+    in property <int> summary-tone;
     callback restart();
     callback add();
     callback check-all();
@@ -109,9 +113,13 @@ export component AppIcon inherits Rectangle {
 
 // The status of a deployment as a tinted pill, like the Android badge:
 // "up to date" in green, an update in the theme's paint, and so on.
-component StatusPill inherits Rectangle {
+export component StatusPill inherits Rectangle {
     in property <int> tone;
     in property <string> text;
+    // Framed even when the tone is unknown (the list's summary).
+    in property <bool> always-framed;
+    in property <length> font-size: Theme.font-small;
+    in property <length> pad-x: 10px;
     property <color> tint: root.tone == 1 ? Theme.ok
         : root.tone == 2 ? Theme.paint-a
         : root.tone == 3 ? Theme.paint-b
@@ -121,18 +129,19 @@ component StatusPill inherits Rectangle {
     horizontal-stretch: 0;
     min-height: 22px;
     border-radius: self.height / 2;
-    background: root.text != "" && root.tone != 0 ? root.tint.with-alpha(0.14) : transparent;
-    border-width: root.text != "" && root.tone != 0 ? 1px : 0px;
+    property <bool> framed: root.text != "" && (root.tone != 0 || root.always-framed);
+    background: root.framed ? root.tint.with-alpha(0.14) : transparent;
+    border-width: root.framed ? 1px : 0px;
     border-color: root.tint.with-alpha(0.4);
     HorizontalLayout {
-        padding-left: 10px;
-        padding-right: 10px;
+        padding-left: root.pad-x;
+        padding-right: root.pad-x;
         padding-top: 2px;
         padding-bottom: 2px;
         Text {
             text: root.text;
             color: root.tint;
-            font-size: Theme.font-small;
+            font-size: root.font-size;
             font-weight: Theme.regular;
             vertical-alignment: center;
             overflow: elide;

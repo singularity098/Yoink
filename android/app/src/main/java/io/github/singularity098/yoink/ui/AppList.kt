@@ -103,14 +103,8 @@ fun AppListScreen(model: YoinkModel, padding: PaddingValues, onOptions: () -> Un
                 verticalAlignment = Alignment.CenterVertically,
                 horizontalArrangement = Arrangement.spacedBy(8.dp),
             ) {
-                if (model.checking || updates.size > 1) Text(
-                    if (model.checking) "Checking for updates…" else "${updates.size} updates",
-                    style = MaterialTheme.typography.bodyMedium,
-                    color = look.textDim,
-                    maxLines = 1,
-                    overflow = TextOverflow.Ellipsis,
-                    modifier = Modifier.weight(1f, fill = false),
-                )
+                val (text, color) = summary(model)
+                Box(Modifier.weight(1f, fill = false)) { SummaryPill(text, color) }
                 Spacer1()
                 if (updates.size > 1) BigButton(
                     "Update all", primary = true, enabled = !model.planning,
@@ -182,6 +176,48 @@ fun AppListScreen(model: YoinkModel, padding: PaddingValues, onOptions: () -> Un
             containerColor = Palette.bg,
         )
     }
+}
+
+/** One line for the whole list, coloured like the cards' badges: so an update shows without scrolling. */
+@Composable
+private fun summary(model: YoinkModel): Pair<String, androidx.compose.ui.graphics.Color> {
+    val look = LocalLook.current
+    if (model.checking) return "Checking for updates…" to look.paintB
+    val working = model.busy.values.count { !it.checking }
+    if (working > 0) return "Working on $working app${if (working == 1) "" else "s"}…" to look.paintB
+    val statuses = model.apps.map { model.status(it) }
+    val updates = statuses.count { it == Status.UpdateAvailable }
+    val missing = statuses.count { it == Status.NotInstalled }
+    val unknown = statuses.count { it == Status.Unknown }
+    val errors = model.apps.count { it.error.isNotEmpty() }
+    val parts = buildList {
+        if (updates > 0) add("$updates update${if (updates == 1) "" else "s"} available")
+        if (errors > 0) add("$errors error${if (errors == 1) "" else "s"}")
+        if (missing > 0) add("$missing not installed")
+        if (unknown > 0 && isEmpty()) add("$unknown not checked yet")
+    }
+    return when {
+        updates > 0 -> parts.joinToString(" · ") to look.accent
+        errors > 0 -> parts.joinToString(" · ") to Palette.danger
+        missing > 0 || unknown > 0 -> parts.joinToString(" · ") to look.textDim
+        else -> "Everything up to date" to Palette.ok
+    }
+}
+
+@Composable
+private fun SummaryPill(text: String, color: androidx.compose.ui.graphics.Color) {
+    Text(
+        text,
+        color = color,
+        style = MaterialTheme.typography.bodyMedium,
+        maxLines = 1,
+        overflow = TextOverflow.Ellipsis,
+        modifier = Modifier
+            .clip(RoundedCornerShape(50))
+            .background(color.copy(alpha = 0.12f))
+            .border(1.dp, color.copy(alpha = 0.35f), RoundedCornerShape(50))
+            .padding(horizontal = 14.dp, vertical = 6.dp),
+    )
 }
 
 /** Picks the order of the list, as the desktop's Sort button does. */

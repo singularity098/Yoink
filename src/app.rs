@@ -686,6 +686,60 @@ impl App {
             format!("{count} app{}", if count == 1 { "" } else { "s" })
         };
         ui.set_subtitle(sub.into());
+        let (summary, tone) = self.overall_status();
+        apps.set_summary(summary.into());
+        apps.set_summary_tone(tone);
+    }
+
+    /// One status for the whole list, toned like a deployment's (see
+    /// DepRow): what is under way first, then updates, errors, not
+    /// installed, not checked, and else "Everything up to date".
+    fn overall_status(&self) -> (String, i32) {
+        let plural = |n: usize, one: &str, many: &str| {
+            format!("{n} {}", if n == 1 { one } else { many })
+        };
+        if self.library.apps.is_empty() {
+            return (String::new(), 0);
+        }
+        let mut counts = [0usize; 6];
+        for app in &self.library.apps {
+            for d in &app.deployments {
+                let tone = self.dep_row(app, d).tone;
+                counts[tone.clamp(0, 5) as usize] += 1;
+            }
+        }
+        let [unknown, _ok, updates, working, errors, missing] = counts;
+        if working > 0 {
+            return (format!("Working on {}…", plural(working, "deployment", "deployments")), 3);
+        }
+        if self.checking > 0 {
+            return ("Checking for updates…".into(), 3);
+        }
+        let mut parts = Vec::new();
+        if updates > 0 {
+            parts.push(format!("{} available", plural(updates, "update", "updates")));
+        }
+        if errors > 0 {
+            parts.push(plural(errors, "error", "errors"));
+        }
+        if missing > 0 {
+            parts.push(format!("{missing} not installed"));
+        }
+        if unknown > 0 && parts.is_empty() {
+            parts.push(format!("{unknown} not checked yet"));
+        }
+        let tone = if updates > 0 {
+            2
+        } else if errors > 0 {
+            4
+        } else if missing > 0 {
+            5
+        } else if unknown > 0 {
+            0
+        } else {
+            return ("Everything up to date".into(), 1);
+        };
+        (parts.join(" · "), tone)
     }
 
     fn set_busy_text(&self, text: &str) {
